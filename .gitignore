@@ -1,1 +1,7 @@
+# Python
 **/venv/**
+**/__pycache__/**
+
+# Configuration information
+**/cfg/**
+*.json
