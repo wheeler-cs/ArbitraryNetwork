@@ -4,6 +4,8 @@ import socket
 from typing import Set
 
 
+
+# ======================================================================================================================
 class Client(object):
     '''
     
@@ -50,14 +52,33 @@ class Client(object):
 
     
     def send(self, ip: str, data: str) -> None:
+        '''
+        
+        '''
         self.connections[ip].send(data.encode())
 
+    
+    def recv(self, ip: str) -> None:
+        '''
+        
+        '''
+        data = self.connections[ip].recv(1024)
+
+    
+    def console_mode(self, ip) -> None:
+        msg = ''
+        while msg != "exit":
+            msg = input("> ")
+            self.send(ip, msg)
+            self.recv(ip)
 
 
+
+# ======================================================================================================================
 if __name__ == "__main__":
     print("[Running Stand-Alone Client]")
     client = Client()
     client.connect("127.0.0.1", 7877)
-    client.send("127.0.0.1", "Hello")
+    client.console_mode("127.0.0.1")
     client.disconnect("127.0.0.1")
     
