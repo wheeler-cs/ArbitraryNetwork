@@ -3,6 +3,15 @@ import os
 
 from typing import Set
 
+DEFAULT_CORE                = {"localhost": "127.0.0.1"}
+DEFAULT_PACKET_SIZE         = 1024
+DEFAULT_MIN_REROUTE_TIMEOUT = 60
+DEFAULT_MAX_REROUTE_TIMEOUT = 300
+DEFAULT_PORT                = 7877
+DEFAULT_MAX_CLIENTS         = 5
+
+
+
 
 class Configuration(object):
     '''
@@ -15,6 +24,8 @@ class Configuration(object):
         self.core_nodes: Set[str] = set()
         self.listen_port: int = 0
         self.server_max_clients: int = 0
+
+        self.logging_dir: str = ""
 
         self.load_json(json_dir)
 

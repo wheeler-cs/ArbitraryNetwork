@@ -12,6 +12,10 @@ def generate_network(out_file: str = DEFAULT_NETWORK) -> None:
                 {
                     "localhost": "127.0.0.1",
                 },
+                "logging":
+                {
+                    "log_file": "program.log",
+                },
                 "client":
                 {
                     "packet_size": 1024,
