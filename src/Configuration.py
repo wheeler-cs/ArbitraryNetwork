@@ -3,6 +3,7 @@ import os
 
 from typing import Set
 
+
 class Configuration(object):
     '''
     
@@ -17,7 +18,7 @@ class Configuration(object):
 
         self.load_json(json_dir)
 
-    
+
     def load_json(self, json_dir: str) -> None:
         '''
         

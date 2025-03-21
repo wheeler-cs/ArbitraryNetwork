@@ -8,16 +8,21 @@ def generate_network(out_file: str = DEFAULT_NETWORK) -> None:
     '''
     
     '''
-    cfg_json = {"core_nodes":
+    cfg_json = {"trusted_cores":
                 {
-                    "ip0": "127.0.0.1",
-                    "ip1": "127.0.0.2",
-                    "ip2": "127.0.0.3"
+                    "localhost": "127.0.0.1",
                 },
-                "listen_port": 7877,
-                "server_max_clients": 5,
-                "client_min_reroute_time": 60,
-                "client_max_reroute_time": 300,
+                "client":
+                {
+                    "packet_size": 1024,
+                    "min_reroute_timeout": 60,
+                    "max_reroute_timeout": 300,
+                },
+                "server":
+                {
+                    "listen_port": 7877,
+                    "max_clients": 5,
+                }
                }
     with open("cfg/network.json", 'w') as network_cfg:
         network_cfg.write(json.dumps(cfg_json, indent=4))

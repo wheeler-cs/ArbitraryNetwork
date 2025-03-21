@@ -29,7 +29,7 @@ class AdHocNetwork(object):
         '''
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind(('', self.config.listen_port))
-        print(f"[INFO] Bound server to port {self.config.listen_port}\n[INFO] Listening for peers")
+        print(f"[INFO] Server: Bound to port {self.config.listen_port}\n[INFO] Server: Listening for peers")
         self.server.listen(self.config.server_max_clients)
 
     
@@ -39,7 +39,34 @@ class AdHocNetwork(object):
         '''
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+    
+    def start_server(self) -> None:
+        '''
+        
+        '''
+        while(True):
+            conn, addr = self.server.accept()
+            print(f"[INFO] Server: Connected to {addr}")
+            conn.close()
+            break
+
+    
+    def client_conn(self, ip: str, port: int) -> None:
+        '''
+        
+        '''
+        self.client.connect(())
+
+    
+    def shutdown(self) -> None:
+        '''
+        
+        '''
+        self.server.close()
+        self.client.close()
+
 
 
 if __name__ == "__main__":
     ahn = AdHocNetwork()
+    ahn.start_server()
