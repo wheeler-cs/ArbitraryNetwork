@@ -1,6 +1,7 @@
 import json
 
 DEFAULT_NETWORK = "cfg/network.json"
+DEFAULT_CORE    = "cfg/core.json"
 
 
 
@@ -32,12 +33,31 @@ def generate_network(out_file: str = DEFAULT_NETWORK) -> None:
         network_cfg.write(json.dumps(cfg_json, indent=4))
 
 
+def generate_core(out_file: str = DEFAULT_CORE) -> None:
+    '''
+    
+    '''
+    cfg_json = {"core_members":
+                {
+                    "alpha": "127.0.0.1:9801",
+                    "beta": "127.0.0.1:9802",
+                },
+                "files":
+                {
+                    "private_key": "keys/key.priv",
+                    "public_key": "keys/key.pub",
+                }
+               }
+    with open(out_file, 'w') as core_cfg:
+        core_cfg.write(json.dumps(cfg_json, indent=4))
+
+
 
 if __name__ == "__main__":
     print("[JSON Generation]")
     do_run = True
     while do_run:
-        print("\n0) Exit\n1) Network")
+        print("\n0) Exit\n1) Network\n2) Core")
         try:
             choice = int(input("> "))
             if(type(choice) is int):
@@ -45,5 +65,11 @@ if __name__ == "__main__":
                     do_run = False
                 elif(choice == 1):
                     generate_network()
-        except:
-            pass
+                    print("[Network Config Generated]")
+                elif(choice == 2):
+                    generate_core()
+                    print("[Core Config Generated]")
+            else:
+                print("Please specify a number")
+        except Exception as e:
+            print(e)

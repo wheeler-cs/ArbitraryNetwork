@@ -5,3 +5,6 @@
 # Configuration information
 **/cfg/**
 *.json
+
+# Development information
+**/keys/**
