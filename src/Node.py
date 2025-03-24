@@ -1,4 +1,6 @@
+from Client import Client
 from PeerNode import PeerNode
+from Server import Server
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
@@ -17,26 +19,34 @@ class Node(object):
         '''
         
         '''
+        # Member variables
         self.core:        List[PeerNode] = list()
         self.peers:       List[PeerNode] = list()
         self.path:        List[PeerNode] = list()
         self.public_key:  rsa            = ""
         self.private_key: rsa            = ""
-
+        # Networking infrastructure
+        self.client: Client = Client()
+        self.server: Server = Server()
+        # Setup
         self.load_cfg(cfg_file)
 
     
     def load_cfg(self, cfg_file: str) -> None:
+        '''
+        
+        '''
         cfg_data = None
         with open(cfg_file, 'r') as cfg_read:
             cfg_data = json.load(cfg_read)
-
+        # Load data about core nodes
         for idx, member in enumerate(cfg_data["core_members"]):
             node_name = member
             ip_port = cfg_data["core_members"][member]
             ip, port = ip_port.split(':')
             new_peer = PeerNode(ip, port, node_name)
             self.core.append(new_peer)
+        self.peers = self.core.copy()
     
 
     def gen_keys(self, key_schema: str = "keys/key") -> None:
@@ -72,7 +82,7 @@ class Node(object):
                                                                       password=None,
                                                                       backend=default_backend())
         except Exception as e:
-            raise Exception("[ERR] Unable to load keys: {e}")
+            raise Exception("[ERR] Unable to load keys\n|-> Reason: {e}")
         
 
     def encrypt(self, data: bytes, key) -> bytes:
@@ -86,27 +96,50 @@ class Node(object):
 
 
     def decrypt(self, data: bytes, key) -> bytes:
+        '''
+        
+        '''
         dec_data = key.decrypt(data,
                                padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
                                             algorithm=hashes.SHA256(),
                                             label=None))
         return dec_data
+    
 
-
-    def get_core_keys(self) -> None:
+    def connect_core(self) -> None:
         '''
         
         '''
+        for idx, member in self.peers:
+            self.get_peer_key(member.ip, member.port)
+    
 
-
-
-    def await_key_request(self) -> None:
+    def get_peer_key(self, ip: str, port: str) -> None:
         '''
         
         '''
+        # Contact peer for key
+        self.client.connect(ip, port)
+        self.client.send(ip, b"GETKEY")
+        response = self.client.recv(ip).decode()
+        # Decode what response means
+        if response == "BLOCK":
+            print("[WARN] Node {ip} has blocked your key request")
+        elif "ISKEY " == response[:6]:
+            for idx, peer in enumerate(self.peers):
+                if peer.ip == ip:
+                    peer.public_key = response[5:]
+    
+
+    def run_server(self) -> None:
+        '''
+        
+        '''
+        self.server.run()
 
 
 
+# ======================================================================================================================
 if __name__ == "__main__":
     node = Node()
     node.load_keys("keys/key.pub", "keys/key.priv")

@@ -15,9 +15,7 @@ class Client(object):
         '''
         
         '''
-        self.peer_nodes: Set[str] = set()
         self.connections: dict[str, socket.socket] = dict()
-
         self.packet_size:         int = Configuration.DEFAULT_PACKET_SIZE
         self.min_reroute_timeout: int = Configuration.DEFAULT_MIN_REROUTE_TIMEOUT
         self.max_reroute_timeout: int = Configuration.DEFAULT_MAX_REROUTE_TIMEOUT
@@ -36,8 +34,7 @@ class Client(object):
             else:
                 raise Exception()
         except Exception as e:
-            print(f"[ERR] Unable to establish forward connection with {ip} on {port}")
-            print(e)
+            print(f"[ERR] Unable to establish forward connection with {ip} on {port}\n|-> Reason: {e}")
 
     
     def disconnect(self, ip: str) -> None:
@@ -48,21 +45,22 @@ class Client(object):
             self.connections[ip].close()
             self.connections.pop(ip)
         except Exception as e:
-            print(f"[ERR] Unable to disconnect from {ip}: {e}")
+            print(f"[ERR] Unable to disconnect from {ip}\n|-> Reason: {e}")
 
     
-    def send(self, ip: str, data: str) -> None:
+    def send(self, ip: str, data: bytes) -> None:
         '''
         
         '''
-        self.connections[ip].send(data.encode())
+        self.connections[ip].send(data)
 
     
-    def recv(self, ip: str) -> None:
+    def recv(self, ip: str) -> bytes:
         '''
         
         '''
-        data = self.connections[ip].recv(1024)
+        data = self.connections[ip].recv(2048)
+        return data
 
     
     def console_mode(self, ip) -> None:
@@ -70,7 +68,7 @@ class Client(object):
         while msg != "exit":
             msg = input("> ")
             self.send(ip, msg)
-            self.recv(ip)
+            print(self.recv(ip).decode())
 
 
 

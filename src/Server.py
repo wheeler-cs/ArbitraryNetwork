@@ -24,16 +24,20 @@ class Server(object):
         with open(cfg_file, 'r') as cfg_read:
             cfg_data = json.load(cfg_read)
         print(cfg_data)
+
+
+    def initialize(self) -> None:
+        self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.connection.bind(('', self.port))
+        print(f"[INFO] Server initialized")
     
 
     def run(self) -> None:
-        self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connection.bind(('', self.port))
         self.connection.listen(5)
         print(f"[INFO] Server running on port {self.port}")
         conn, addr = self.connection.accept()
         while True:
-            data = conn.recv(1024)
+            data = conn.recv(2048)
             decoded_data = data.decode()
             print(decoded_data)
             if(decoded_data == "exit"):
