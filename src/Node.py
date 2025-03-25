@@ -10,7 +10,18 @@ from typing import List
 
 
 class Node(object):
-    '''
+    '''Base class for entities part of the network.
+
+    Attributes:
+        peers (List[PeerNode]):
+        path (List[PeerNode]): 
+
+        public_key (rsa.RSAPublicKey):
+        private_key (rsa.RSAPrivateKey):
+
+        client (Client):
+        server (Server):
+
 
     Code for handling keys adapted from https://nitratine.net/blog/post/asymmetric-encryption-and-decryption-in-python/
     
@@ -20,11 +31,10 @@ class Node(object):
         
         '''
         # Member variables
-        self.core:        List[PeerNode] = list()
-        self.peers:       List[PeerNode] = list()
-        self.path:        List[PeerNode] = list()
-        self.public_key:  rsa            = ""
-        self.private_key: rsa            = ""
+        self.peers:       List[PeerNode]    = list()
+        self.path:        List[PeerNode]    = list()
+        self.public_key:  rsa.RSAPublicKey  = None
+        self.private_key: rsa.RSAPrivateKey = None
         # Networking infrastructure
         self.client: Client = Client()
         self.server: Server = Server()
@@ -44,9 +54,8 @@ class Node(object):
             node_name = member
             ip_port = cfg_data["core_members"][member]
             ip, port = ip_port.split(':')
-            new_peer = PeerNode(ip, port, node_name)
-            self.core.append(new_peer)
-        self.peers = self.core.copy()
+            new_peer = PeerNode(ip=ip, port=port, name=node_name, is_core=True)
+            self.peers.append(new_peer)
     
 
     def gen_keys(self, key_schema: str = "keys/key") -> None:
@@ -120,15 +129,16 @@ class Node(object):
         '''
         # Contact peer for key
         self.client.connect(ip, port)
-        self.client.send(ip, b"GETKEY")
+        self.client.send(ip, "GETKEY".encode())
         response = self.client.recv(ip).decode()
         # Decode what response means
         if response == "BLOCK":
-            print("[WARN] Node {ip} has blocked your key request")
+            print("[WARN] Node {ip} has blocked new connection request")
+            self.client.close()
         elif "ISKEY " == response[:6]:
             for idx, peer in enumerate(self.peers):
                 if peer.ip == ip:
-                    peer.public_key = response[5:]
+                    peer.public_key = response[6:]
     
 
     def run_server(self) -> None:
@@ -136,6 +146,12 @@ class Node(object):
         
         '''
         self.server.run()
+
+    
+    def client_console(self) -> None:
+        '''
+        
+        '''
 
 
 

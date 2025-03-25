@@ -31,10 +31,8 @@ class Client(object):
                 new_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 new_conn.connect((ip, port))
                 self.connections[ip] = new_conn
-            else:
-                raise Exception()
         except Exception as e:
-            print(f"[ERR] Unable to establish forward connection with {ip} on {port}\n|-> Reason: {e}")
+            print(f"[ERR] Unable to establish forward connection with {ip} on {port}\n |-> {e}")
 
     
     def disconnect(self, ip: str) -> None:
@@ -45,13 +43,16 @@ class Client(object):
             self.connections[ip].close()
             self.connections.pop(ip)
         except Exception as e:
-            print(f"[ERR] Unable to disconnect from {ip}\n|-> Reason: {e}")
+            print(f"[ERR] Unable to disconnect from {ip}\n |-> {e}")
 
     
     def send(self, ip: str, data: bytes) -> None:
         '''
         
         '''
+        # Safeguard; data _should_ be bytes
+        if(data == str):
+            data = data.encode()
         self.connections[ip].send(data)
 
     
@@ -64,11 +65,16 @@ class Client(object):
 
     
     def console_mode(self, ip) -> None:
+        '''
+        
+        '''
         msg = ''
-        while msg != "exit":
+        while True:
             msg = input("> ")
-            self.send(ip, msg)
-            print(self.recv(ip).decode())
+            self.send(ip, msg.encode())
+            response = self.recv(ip).decode()
+            if response == "EXIT":
+                break
 
 
 
