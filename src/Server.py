@@ -17,6 +17,10 @@ class Server(object):
 
         max_conns (int): Maximum number of clients able to connect to server.
         conn_list (List[threading.Thread]): List of threads containing connections with clients.
+    
+    Args:
+        cfg_file (str): Path to configuration file to load upon server initializaiton.
+
     '''
     def __init__(self, cfg_file: str = "cfg/core.json") -> None:
         '''Server class initializer.
@@ -40,7 +44,11 @@ class Server(object):
 
 
     def load_cfg(self, cfg_file: str) -> None:
-        '''
+        ''' Loads configuration data from provided file.
+
+        Args:
+            cfg_file (str): Path to configuration file for server.
+
         TODO: Implement this
         '''
         cfg_data = None
@@ -71,7 +79,7 @@ class Server(object):
     
 
     def thread_collect(self):
-        '''
+        '''Waits for connections to close and reaps thread once terminated.
         
         '''
         print("[INFO] Watching for dead threads")
@@ -84,7 +92,10 @@ class Server(object):
 
 
     def run(self) -> None:
-        self.connection.listen(5)
+        '''Runs asynchronous server, which will accept incoming connections and connect if not maxxed out.
+        
+        '''
+        self.connection.listen(self.max_conns)
         print(f"[INFO] Server running on port {self.port}")
         while True:
             # Listen for connection attempts

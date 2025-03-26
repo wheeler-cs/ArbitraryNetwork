@@ -23,8 +23,11 @@ class Client(object):
     
 
     def connect(self, ip: str, port: int) -> None:
-        '''
-        
+        '''Attempt outgoing connection to external server.
+
+        Args:
+            ip (str): IPv4 address of target server.
+            port (int): Port server is listening for connections on.
         '''
         try:
             if(ip not in self.connections.keys()):
@@ -36,7 +39,10 @@ class Client(object):
 
     
     def disconnect(self, ip: str) -> None:
-        '''
+        '''Close outgoing connection with server.
+
+        Args:
+            ip (str): IPv4 address of connection to be closed.
         
         '''
         try:
@@ -46,8 +52,12 @@ class Client(object):
             print(f"[ERR] Unable to disconnect from {ip}\n |-> {e}")
 
     
-    def send(self, ip: str, data: bytes) -> None:
-        '''
+    def send(self, ip: str, data: bytes | str) -> None:
+        '''Send data over an open connection.
+
+        Args:
+            ip (str): IPv4 address of associated connection.
+            data (bytes | str): Data or string message to be sent to destination.
         
         '''
         # Safeguard; data _should_ be bytes
@@ -57,15 +67,21 @@ class Client(object):
 
     
     def recv(self, ip: str) -> bytes:
-        '''
+        '''Receive data from a specific connection.
+
+        Args:
+            ip (str): IPv4 address client anticipates data from.
         
         '''
         data = self.connections[ip].recv(2048)
         return data
 
     
-    def console_mode(self, ip) -> None:
-        '''
+    def console_mode(self, ip: str) -> None:
+        '''Enter console mode for string-based entry of data.
+
+        Args:
+            ip (str): IPv4 address to send and receive data over.
         
         '''
         msg = ''
