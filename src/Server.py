@@ -24,7 +24,7 @@ class Server(object):
         cfg_file (str): Path to configuration file to load upon server initializaiton.
 
     '''
-    def __init__(self, cfg_file: str = "cfg/core.json") -> None:
+    def __init__(self, cfg_file: str = "cfg/network.json") -> None:
         '''Server class initializer.
 
         Initializes all member variables and binds server listening connection to desired port.
@@ -34,16 +34,17 @@ class Server(object):
         
         '''
         # Connection information
-        self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.port:         int = Configuration.DEFAULT_PORT
-        self.connection.bind(('', self.port))
+        self.port: int = Configuration.DEFAULT_PORT
         # Async management
         self.max_conns:        int                    = Configuration.DEFAULT_MAX_CLIENTS
         self.collect_interval: int                    = 30
         self.conn_list:        List[threading.Thread] = list()
         self.collect:          threading.Thread       = threading.Thread(target=self.thread_collect)
+        # Start server components
+        self.load_cfg(cfg_file)
+        self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.connection.bind(('', self.port))
         self.collect.start()
-
 
 
     def load_cfg(self, cfg_file: str) -> None:
@@ -51,14 +52,14 @@ class Server(object):
 
         Args:
             cfg_file (str): Path to configuration file for server.
-
-        TODO: Implement this
         '''
         cfg_data = None
         with open(cfg_file, 'r') as cfg_read:
             cfg_data = json.load(cfg_read)
-        print(cfg_data)
-
+        self.max_conns = cfg_data["server"]["max_clients"]
+        self.collect_interval = cfg_data["server"]["reap_interval"]
+        self.port = cfg_data["server"]["listen_port"]
+        
 
     def async_conn(self, conn: socket.socket, addr) -> None:
         '''Asynchronous connection running in own thread upon successful connection with client.
@@ -87,14 +88,12 @@ class Server(object):
         '''Waits for connections to close and reaps thread once terminated.
         
         '''
-        print("[INFO] Watching for dead threads")
         while True:
             # Reap zombie threads
             for thread in self.conn_list:
                 try:
                     thread.join(0.001)
                     if(not(thread.is_alive())):
-                        print(f"Reaping thread: {thread}")
                         self.conn_list.remove(thread)
                 except Exception as e:
                     print(f"[WARN] Unable to join thread {thread} currently")
@@ -105,8 +104,8 @@ class Server(object):
         '''Runs asynchronous server, which will accept incoming connections and connect if not maxxed out.
         
         '''
+        print(self)
         self.connection.listen(self.max_conns)
-        print(f"[INFO] Server running on port {self.port}")
         # Asynchronous thread collection
         while True:
             # Listen for connection attempts
@@ -122,6 +121,13 @@ class Server(object):
             else: # Connections maxxed, send BLOCK
                 conn.send(MSG_BLOCK)
                 conn.close()
+    
+
+    def __str__(self) -> str:
+        '''
+        
+        '''
+        return(f"Forwarding Server\nPort: {self.port}  ||  Max Connections: {self.max_conns}  ||  Collection Interval: {self.collect_interval}\n")
 
 
 
