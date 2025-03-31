@@ -1,4 +1,5 @@
 from Client import Client
+from Messages import *
 from PeerNode import PeerNode
 from Server import Server
 
@@ -9,6 +10,8 @@ import json
 from typing import List
 
 
+
+# ======================================================================================================================
 class Node(object):
     '''Base class for entities part of the network.
 
@@ -37,7 +40,7 @@ class Node(object):
         self.private_key: rsa.RSAPrivateKey = None
         # Networking infrastructure
         self.client: Client = Client()
-        self.server: Server = Server()
+        #self.server: Server = Server()
         # Setup
         self.load_cfg(cfg_file)
 
@@ -56,6 +59,18 @@ class Node(object):
             ip, port = ip_port.split(':')
             new_peer = PeerNode(ip=ip, port=port, name=node_name, is_core=True)
             self.peers.append(new_peer)
+
+    
+    def new_client_conn(self, ip, port) -> None:
+        '''
+        
+        '''
+        conn_state = self.client.connect(ip, port)
+        print(conn_state)
+        if(conn_state == MSG_HELLO):
+            print(f"[INFO] Connection with {ip} on port {port} established")
+        elif(conn_state == MSG_BLOCK):
+            print(f"[ERR] Server running at {ip} on port {port} issued a connection block")
     
 
     def gen_keys(self, key_schema: str = "keys/key") -> None:
@@ -129,16 +144,8 @@ class Node(object):
         '''
         # Contact peer for key
         self.client.connect(ip, port)
-        self.client.send(ip, "GETKEY".encode())
+        self.client.send(ip, MSG_GETKEY)
         response = self.client.recv(ip).decode()
-        # Decode what response means
-        if response == "BLOCK":
-            print("[WARN] Node {ip} has blocked new connection request")
-            self.client.close()
-        elif "ISKEY " == response[:6]:
-            for idx, peer in enumerate(self.peers):
-                if peer.ip == ip:
-                    peer.public_key = response[6:]
     
 
     def run_server(self) -> None:
@@ -148,16 +155,16 @@ class Node(object):
         self.server.run()
 
     
-    def client_console(self) -> None:
+    def client_console(self, ip: str) -> None:
         '''
         
         '''
+        self.client.console_mode(ip)
 
 
 
 # ======================================================================================================================
 if __name__ == "__main__":
     node = Node()
-    node.load_keys("keys/key.pub", "keys/key.priv")
-    enc_data = node.encrypt(b"Hello", node.public_key)
-    print(len(enc_data))
+    node.new_client_conn("127.0.0.1", 7877)
+    node.client_console("127.0.0.1")

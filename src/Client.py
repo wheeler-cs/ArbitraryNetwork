@@ -1,4 +1,5 @@
 import Configuration
+from Messages import *
 
 import socket
 from typing import Set
@@ -15,6 +16,7 @@ class Client(object):
         '''
         
         '''
+        # Connection information
         self.connections: dict[str, socket.socket] = dict()
         self.packet_size:         int = Configuration.DEFAULT_PACKET_SIZE
         self.min_reroute_timeout: int = Configuration.DEFAULT_MIN_REROUTE_TIMEOUT
@@ -22,7 +24,7 @@ class Client(object):
         self.port:                int = Configuration.DEFAULT_PORT
     
 
-    def connect(self, ip: str, port: int) -> None:
+    def connect(self, ip: str, port: int) -> None | str:
         '''Attempt outgoing connection to external server.
 
         Args:
@@ -34,8 +36,10 @@ class Client(object):
                 new_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 new_conn.connect((ip, port))
                 self.connections[ip] = new_conn
+                return self.recv(ip).decode()
         except Exception as e:
             print(f"[ERR] Unable to establish forward connection with {ip} on {port}\n |-> {e}")
+            return None
 
     
     def disconnect(self, ip: str) -> None:
@@ -48,6 +52,7 @@ class Client(object):
         try:
             self.connections[ip].close()
             self.connections.pop(ip)
+            print(f"[INFO] Disconnected from {ip}")
         except Exception as e:
             print(f"[ERR] Unable to disconnect from {ip}\n |-> {e}")
 
@@ -88,8 +93,8 @@ class Client(object):
         while True:
             msg = input("> ")
             self.send(ip, msg.encode())
-            response = self.recv(ip).decode()
-            if response == "EXIT":
+            response = self.recv(ip)
+            if(response == MSG_EXIT):
                 break
 
 

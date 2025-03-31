@@ -19,7 +19,7 @@ def generate_network(out_file: str = DEFAULT_NETWORK) -> None:
                 },
                 "client":
                 {
-                    "packet_size": 1024,
+                    "packet_size": 2048,
                     "min_reroute_timeout": 60,
                     "max_reroute_timeout": 300,
                 },
@@ -27,6 +27,7 @@ def generate_network(out_file: str = DEFAULT_NETWORK) -> None:
                 {
                     "listen_port": 7877,
                     "max_clients": 5,
+                    "reap_interval": 20,
                 }
                }
     with open("cfg/network.json", 'w') as network_cfg:

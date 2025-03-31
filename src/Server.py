@@ -1,8 +1,10 @@
 import Configuration
+from Messages import *
 
 import json
 import socket
 import threading
+from time import sleep
 from typing import List
 
 
@@ -36,9 +38,10 @@ class Server(object):
         self.port:         int = Configuration.DEFAULT_PORT
         self.connection.bind(('', self.port))
         # Async management
-        self.max_conns:    int                    = Configuration.DEFAULT_MAX_CLIENTS
-        self.conn_list:    List[threading.Thread] = list()
-        self.collect:      threading.Thread       = threading.Thread(target=self.thread_collect)
+        self.max_conns:        int                    = Configuration.DEFAULT_MAX_CLIENTS
+        self.collect_interval: int                    = 30
+        self.conn_list:        List[threading.Thread] = list()
+        self.collect:          threading.Thread       = threading.Thread(target=self.thread_collect)
         self.collect.start()
 
 
@@ -64,16 +67,18 @@ class Server(object):
             conn (socket.socket): Connection object streaming data between client and server.
             addr (socket._RetAddress): Return address for client.
         '''
-        print(f"[INFO] Established connection with {addr} ({len(self.conn_list)}/{self.max_conns})")
+        print(f"[INFO] Established connection with {addr} ({len(self.conn_list) + 1}/{self.max_conns})")
         while True:
             data = conn.recv(2048)
-            dec_data = data.decode()
-            if(dec_data == "EXIT"):
-                conn.send("EXIT".encode())
+            if(data == MSG_EXIT): # Cleanly exit
+                conn.send(MSG_EXIT)
                 print(f"{addr} disconnected")
                 break
+            elif(data == MSG_NULLSTR): # Happens when client does CTRL + C
+                print(f"{addr} is unresponsive")
+                break
             else:
-                print(f"{addr}: {dec_data}")
+                print(f"{addr}: {data.decode('utf-8')}")
             conn.send(data)
         conn.close()
     
@@ -83,12 +88,17 @@ class Server(object):
         
         '''
         print("[INFO] Watching for dead threads")
-        # Reap zombie threads
-        for thread in self.conn_list:
-            thread.join(0.5)
-            if(not(thread.is_alive())):
-                print(f"Reaping thread: {thread}")
-                self.conn_list.remove(thread)
+        while True:
+            # Reap zombie threads
+            for thread in self.conn_list:
+                try:
+                    thread.join(0.001)
+                    if(not(thread.is_alive())):
+                        print(f"Reaping thread: {thread}")
+                        self.conn_list.remove(thread)
+                except Exception as e:
+                    print(f"[WARN] Unable to join thread {thread} currently")
+            sleep(self.collect_interval) # Keeps from pinning CPU at 100%
 
 
     def run(self) -> None:
@@ -97,15 +107,20 @@ class Server(object):
         '''
         self.connection.listen(self.max_conns)
         print(f"[INFO] Server running on port {self.port}")
+        # Asynchronous thread collection
         while True:
             # Listen for connection attempts
             conn, addr = self.connection.accept()
             if(len(self.conn_list) < self.max_conns):
-                self.conn_list.append(threading.Thread(target=self.async_conn, args=(conn, addr)))
-                self.conn_list[-1].start()
-            else: # Connections maxxed; clear buffer and send BLOCK
-                data = conn.recv(2048)
-                conn.send("BLOCK".encode())
+                conn.send(MSG_HELLO)
+                # Create new connection thread
+                # NOTE: You have to create and start the thread before adding it to the thread list because thread
+                # collection is running asynchronously and errors out if the thread isn't started
+                conn_thread = threading.Thread(target=self.async_conn, args=(conn, addr))
+                conn_thread.start()
+                self.conn_list.append(conn_thread)
+            else: # Connections maxxed, send BLOCK
+                conn.send(MSG_BLOCK)
                 conn.close()
 
 
