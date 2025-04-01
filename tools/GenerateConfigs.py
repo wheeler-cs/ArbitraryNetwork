@@ -2,6 +2,7 @@ import json
 
 DEFAULT_NETWORK = "cfg/network.json"
 DEFAULT_CORE    = "cfg/core.json"
+DEFAULT_CLIENT  = "cfg/client.json"
 
 
 
@@ -19,7 +20,6 @@ def generate_network(out_file: str = DEFAULT_NETWORK) -> None:
                 },
                 "client":
                 {
-                    "packet_size": 2048,
                     "min_reroute_timeout": 60,
                     "max_reroute_timeout": 300,
                 },
@@ -53,12 +53,29 @@ def generate_core(out_file: str = DEFAULT_CORE) -> None:
         core_cfg.write(json.dumps(cfg_json, indent=4))
 
 
+def generate_client(out_file: str = DEFAULT_CLIENT) -> None:
+    '''
+    
+    '''
+    cfg_json = {"cores":
+                {
+                    "basic": "127.0.0.1:62500"
+                },
+                "files":
+                {
+                    "private_key": "keys/client.priv",
+                    "public_key": "keys/client.pub",
+                }
+               }
+    with open(out_file, 'w') as client_cfg:
+        client_cfg.write(json.dumps(cfg_json, indent=4))
+
 
 if __name__ == "__main__":
     print("[JSON Generation]")
     do_run = True
     while do_run:
-        print("\n0) Exit\n1) Network\n2) Core")
+        print("\n0) Exit\n1) Network\n2) Core\n3) Client")
         try:
             choice = int(input("> "))
             if(type(choice) is int):
@@ -70,6 +87,9 @@ if __name__ == "__main__":
                 elif(choice == 2):
                     generate_core()
                     print("[Core Config Generated]")
+                elif(choice == 3):
+                    generate_client()
+                    print("[Client Config Generated]")
             else:
                 print("Please specify a number")
         except Exception as e:

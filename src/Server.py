@@ -1,11 +1,13 @@
 import Configuration
+from KeyStore import KeyStore
 from Messages import *
 
+from cryptography.hazmat.primitives import serialization
 import json
 import socket
 import threading
 from time import sleep
-from typing import List
+from typing import Dict, List
 
 
 
@@ -40,6 +42,8 @@ class Server(object):
         self.collect_interval: int                    = 30
         self.conn_list:        List[threading.Thread] = list()
         self.collect:          threading.Thread       = threading.Thread(target=self.thread_collect)
+        # Security
+        self.keystore: KeyStore = None
         # Start server components
         self.load_cfg(cfg_file)
         self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -48,7 +52,7 @@ class Server(object):
 
 
     def load_cfg(self, cfg_file: str) -> None:
-        ''' Loads configuration data from provided file.
+        ''' Loads server-related configuration data from provided file.
 
         Args:
             cfg_file (str): Path to configuration file for server.
@@ -59,7 +63,8 @@ class Server(object):
         self.max_conns = cfg_data["server"]["max_clients"]
         self.collect_interval = cfg_data["server"]["reap_interval"]
         self.port = cfg_data["server"]["listen_port"]
-        
+        self.keystore = KeyStore(cfg_data["server"]["public_key"], cfg_data["server"]["private_key"])
+    
 
     def async_conn(self, conn: socket.socket, addr) -> None:
         '''Asynchronous connection running in own thread upon successful connection with client.
@@ -78,12 +83,17 @@ class Server(object):
             elif(data == MSG_NULLSTR): # Happens when client does CTRL + C
                 print(f"{addr} is unresponsive")
                 break
+            elif(data == MSG_GETKEY):
+                key_bytes = self.keystore.public_key.public_bytes(encoding=serialization.Encoding.PEM,
+                                                                  format=serialization.PublicFormat.SubjectPublicKeyInfo)
+                message = MSG_ISKEY + key_bytes
+                conn.send(message)
             else:
-                print(f"{addr}: {data.decode('utf-8')}")
+                print(f"{addr}: {data}")
             conn.send(data)
         conn.close()
-    
 
+    
     def thread_collect(self):
         '''Waits for connections to close and reaps thread once terminated.
         
@@ -91,6 +101,7 @@ class Server(object):
         while True:
             # Reap zombie threads
             for thread in self.conn_list:
+                # If thread hasn't been started when trying to join, an exception is thrown
                 try:
                     thread.join(0.001)
                     if(not(thread.is_alive())):
@@ -124,7 +135,7 @@ class Server(object):
     
 
     def __str__(self) -> str:
-        '''
+        '''Overrides the default __str__ operation to display server information.
         
         '''
         return(f"Forwarding Server\nPort: {self.port}  ||  Max Connections: {self.max_conns}  ||  Collection Interval: {self.collect_interval}\n")

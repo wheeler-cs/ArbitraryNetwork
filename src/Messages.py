@@ -1,20 +1,15 @@
 
 # Standardized message strings for networked communication
 
-# Only ever issued by a client upon initial connection
-MSG_HELLO = "HELLO".encode("utf-8")
+# Connection-related messages
+MSG_HELLO = "HELLO".encode("utf-8") # Only ever issued by a client upon initial connection
+MSG_BLOCK = "BLOCK".encode("utf-8") # Connection attempt has been blocked
+MSG_EXIT  = "EXIT".encode("utf-8")  # Connection should close
 
-# Request to obtain key
-MSG_GETKEY = "GETKEY".encode("utf-8")
+# Operation messages
+MSG_GETKEY = "GETKEY".encode("utf-8") # Request to obtain key
+MSG_ISKEY  = "ISKEY".encode("utf-8")  # Rest of message contains key
+MSG_DENY   = "DENY".encode("utf-8")   # Request has been denied
 
-# Connection attempt has been blocked
-MSG_BLOCK = "BLOCK".encode("utf-8")
-
-# Request has been denied
-MSG_DENY = "DENY".encode("utf-8")
-
-# Connection should close
-MSG_EXIT = "EXIT".encode("utf-8")
-
-#
-MSG_NULLSTR = "".encode("utf-8")
+# Utility messages
+MSG_NULLSTR = "".encode("utf-8") # Returned by crashed clients

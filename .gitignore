@@ -8,3 +8,6 @@
 
 # Development information
 **/keys/**
+
+# Misc
+**/.vscode/**

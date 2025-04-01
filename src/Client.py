@@ -1,8 +1,11 @@
 import Configuration
+from KeyStore import KeyStore
 from Messages import *
+from PeerNode import PeerNode
 
+import json
 import socket
-from typing import Set
+from typing import List, Set
 
 
 
@@ -12,19 +15,48 @@ class Client(object):
     
     '''
 
-    def __init__(self) -> None:
+    def __init__(self, cfg_file: str = "cfg/client.json") -> None:
         '''
         
         '''
         # Connection information
+        self.peers: List[PeerNode] = list()
         self.connections: dict[str, socket.socket] = dict()
-        self.packet_size:         int = Configuration.DEFAULT_PACKET_SIZE
         self.min_reroute_timeout: int = Configuration.DEFAULT_MIN_REROUTE_TIMEOUT
         self.max_reroute_timeout: int = Configuration.DEFAULT_MAX_REROUTE_TIMEOUT
-        self.port:                int = Configuration.DEFAULT_PORT
+        # Key information
+        self.keystore: KeyStore = None
+        # Setup client
+        self.load_cfg(cfg_file)
+        self.init_core()
     
 
-    def connect(self, ip: str, port: int) -> None | str:
+    def load_cfg(self, cfg_file: str = "cfg/client.json") -> None:
+        '''
+        
+        '''
+        cfg_data = None
+        with open(cfg_file, 'r') as cfg_read:
+            cfg_data = json.load(cfg_read)
+        self.keystore = KeyStore(cfg_data["files"]["public_key"], cfg_data["files"]["private_key"])
+        for peer_name in cfg_data["cores"]:
+            contact_str = cfg_data["cores"][peer_name]
+            ip, port = contact_str.split(':')
+            port = int(port)
+            self.peers.append(PeerNode(ip, port, name=peer_name, is_core=True))
+
+    
+    def init_core(self) -> None:
+        '''
+        
+        '''
+        for peer in self.peers:
+            self.connect(peer)
+            if(peer.conn is not None):
+                self.get_key(peer)
+    
+
+    def connect(self, peer: PeerNode) -> None:
         '''Attempt outgoing connection to external server.
 
         Args:
@@ -32,14 +64,38 @@ class Client(object):
             port (int): Port server is listening for connections on.
         '''
         try:
-            if(ip not in self.connections.keys()):
+            if(peer.conn is None):
                 new_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                new_conn.connect((ip, port))
-                self.connections[ip] = new_conn
-                return self.recv(ip).decode()
+                new_conn.connect((peer.ip, peer.port))
+                response = new_conn.recv(2048)
+                if(response == MSG_HELLO):
+                    print(f"[INFO] Connected with {peer.ip} on {peer.port}")
+                    peer.conn = new_conn
+                elif(response == MSG_BLOCK):
+                    print(f"[WARN] Peer {peer.ip} on {peer.port} has issued a block")
+                    new_conn.close()
+                else:
+                    raise Exception("Peer did not respond to connection")
         except Exception as e:
-            print(f"[ERR] Unable to establish forward connection with {ip} on {port}\n |-> {e}")
-            return None
+            print(f"[ERR] Unable to establish forward connection with {peer.ip} on {peer.port}\n |-> {e}")
+            if(new_conn is not None):
+                new_conn.close()
+    
+
+    def get_key(self, peer: PeerNode) -> None:
+        '''
+        
+        '''
+        peer.conn.send(MSG_GETKEY)
+        response = peer.conn.recv(2048)
+        # Check for specific errors
+        if(response == MSG_DENY):
+            print("[WARN] Peer {peer.ip} on {peer.port} denied key request")
+        # Parse message
+        response = response.decode("utf-8")
+        if(response[:5].encode() == MSG_ISKEY):
+            peer.public_key = ''.join(response.split('\n')[1:-2])
+        
 
     
     def disconnect(self, ip: str) -> None:
@@ -67,7 +123,7 @@ class Client(object):
         '''
         # Safeguard; data _should_ be bytes
         if(data == str):
-            data = data.encode()
+            data = data.encode("utf-8")
         self.connections[ip].send(data)
 
     
@@ -103,7 +159,7 @@ class Client(object):
 if __name__ == "__main__":
     print("[Running Stand-Alone Client]")
     client = Client()
-    client.connect("127.0.0.1", 7877)
-    client.console_mode("127.0.0.1")
-    client.disconnect("127.0.0.1")
+    #client.connect("127.0.0.1", 7877)
+    #client.console_mode("127.0.0.1")
+    #client.disconnect("127.0.0.1")
     

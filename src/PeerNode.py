@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import socket
 
 from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -11,6 +12,7 @@ class PeerNode:
     ip:         str
     port:       str
     name:       str              = "UNDEFINED"
+    conn:       socket.socket    = None
     public_key: rsa.RSAPublicKey = None
     is_core:    bool             = False
 
