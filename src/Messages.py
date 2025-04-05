@@ -13,4 +13,5 @@ MSG_ISKEY  = "ISKEY".encode("utf-8")  # Rest of message contains key
 MSG_DENY   = "DENY".encode("utf-8")   # Request has been denied
 
 # Utility messages
-MSG_NULLSTR = "".encode("utf-8") # Returned by crashed clients
+MSG_NULLSTR = "".encode("utf-8")    # Returned by crashed clients
+MSG_UNKNOWN = "???".encode("utf-8") # Unknown message response

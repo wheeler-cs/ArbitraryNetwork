@@ -2,6 +2,7 @@ import Configuration
 from KeyStore import KeyStore
 from Messages import *
 
+import argparse
 from cryptography.hazmat.primitives import serialization
 import json
 import socket
@@ -26,7 +27,7 @@ class Server(object):
         cfg_file (str): Path to configuration file to load upon server initializaiton.
 
     '''
-    def __init__(self, cfg_file: str = "cfg/network.json") -> None:
+    def __init__(self, cfg_file: str = "cfg/network.json", port: int = 7877) -> None:
         '''Server class initializer.
 
         Initializes all member variables and binds server listening connection to desired port.
@@ -36,7 +37,7 @@ class Server(object):
         
         '''
         # Connection information
-        self.port: int = Configuration.DEFAULT_PORT
+        self.port: int = port
         # Async management
         self.max_conns:        int                    = Configuration.DEFAULT_MAX_CLIENTS
         self.collect_interval: int                    = 30
@@ -78,19 +79,22 @@ class Server(object):
             data = conn.recv(2048)
             if(data == MSG_EXIT): # Cleanly exit
                 conn.send(MSG_EXIT)
-                print(f"{addr} disconnected")
+                print(f"[INFO] {addr} disconnected")
                 break
             elif(data == MSG_NULLSTR): # Happens when client does CTRL + C
-                print(f"{addr} is unresponsive")
+                print(f"[ERR] {addr} is unresponsive")
                 break
             elif(data == MSG_GETKEY):
+                print("[INFO] Client requested key")
                 key_bytes = self.keystore.public_key.public_bytes(encoding=serialization.Encoding.PEM,
                                                                   format=serialization.PublicFormat.SubjectPublicKeyInfo)
                 message = MSG_ISKEY + key_bytes
                 conn.send(message)
+            elif(data.decode("utf-8")[:4] == MSG_ECHO.decode("utf-8")):
+                print(f"{addr}: {data.decode('utf-8')[4:]}")
+                conn.send(data)
             else:
-                print(f"{addr}: {data}")
-            conn.send(data)
+                conn.send("?".encode("utf-8"))
         conn.close()
 
     
@@ -138,12 +142,34 @@ class Server(object):
         '''Overrides the default __str__ operation to display server information.
         
         '''
-        return(f"Forwarding Server\nPort: {self.port}  ||  Max Connections: {self.max_conns}  ||  Collection Interval: {self.collect_interval}\n")
+        return(f"Forwarding Server\n|| Port: {self.port}  ||  Max Connections: {self.max_conns}  ||  Collection Interval: {self.collect_interval} ||\n")
 
 
 
 # ======================================================================================================================
+def create_argv() ->argparse.ArgumentParser:
+    '''
+    
+    '''
+    argv = argparse.ArgumentParser(prog="Arbitrary Network Server",
+                                   description="Run the server component of the arbitrary network")
+    argv.add_argument("-p", "--port",
+                      type=int,
+                      default=7877)
+    return argv
+
+
+def handle_args(argv: argparse.ArgumentParser) -> argparse.Namespace:
+    '''
+    
+    '''
+    return argv.parse_args()
+
+
+# ======================================================================================================================
 if __name__ == "__main__":
+    argv = create_argv()
     print("[Running Stand-Alone Server]")
+    argv = handle_args(argv)
     server = Server()
     server.run()

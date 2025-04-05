@@ -1,4 +1,3 @@
-import Configuration
 from KeyStore import KeyStore
 from Messages import *
 from PeerNode import PeerNode
@@ -50,10 +49,13 @@ class Client(object):
         '''
         
         '''
+        peers_connected = 0
         for peer in self.peers:
             self.connect(peer)
             if(peer.conn is not None):
                 self.get_key(peer)
+                peers_connected += 1
+        print(f"[INFO] Loaded {peers_connected}/{len(self.peers)} peer keys")
     
 
     def connect(self, peer: PeerNode) -> None:
@@ -90,11 +92,14 @@ class Client(object):
         response = peer.conn.recv(2048)
         # Check for specific errors
         if(response == MSG_DENY):
-            print("[WARN] Peer {peer.ip} on {peer.port} denied key request")
+            print(f"[WARN] Peer {peer.ip} on {peer.port} denied key request")
         # Parse message
         response = response.decode("utf-8")
         if(response[:5].encode() == MSG_ISKEY):
             peer.public_key = ''.join(response.split('\n')[1:-2])
+            print(peer.public_key)
+        else:
+            print(f"[ERR] Server sent back unknown message: {response}")
         
 
     
@@ -106,8 +111,9 @@ class Client(object):
         
         '''
         try:
-            self.connections[ip].close()
-            self.connections.pop(ip)
+            for peer in self.peers:
+                if(peer.ip == ip):
+                    peer.conn.close()
             print(f"[INFO] Disconnected from {ip}")
         except Exception as e:
             print(f"[ERR] Unable to disconnect from {ip}\n |-> {e}")
@@ -124,7 +130,10 @@ class Client(object):
         # Safeguard; data _should_ be bytes
         if(data == str):
             data = data.encode("utf-8")
-        self.connections[ip].send(data)
+        for peer in self.peers:
+            if(peer.ip == ip):
+                peer.conn.send(data)
+                break
 
     
     def recv(self, ip: str) -> bytes:
@@ -134,7 +143,11 @@ class Client(object):
             ip (str): IPv4 address client anticipates data from.
         
         '''
-        data = self.connections[ip].recv(2048)
+        data = b''
+        for peer in self.peers:
+            if(peer.ip == ip):
+                data = peer.conn.recv(2048)
+                break
         return data
 
     
@@ -148,10 +161,12 @@ class Client(object):
         msg = ''
         while True:
             msg = input("> ")
-            self.send(ip, msg.encode())
-            response = self.recv(ip)
-            if(response == MSG_EXIT):
-                break
+            if(msg != ''):
+                self.send(ip, msg.encode("utf-8"))
+                response = self.recv(ip)
+                print(response.decode("utf-8"))
+                if(response == MSG_EXIT):
+                    break
 
 
 
@@ -159,7 +174,6 @@ class Client(object):
 if __name__ == "__main__":
     print("[Running Stand-Alone Client]")
     client = Client()
-    #client.connect("127.0.0.1", 7877)
-    #client.console_mode("127.0.0.1")
-    #client.disconnect("127.0.0.1")
+    client.console_mode("127.0.0.1")
+    client.disconnect("127.0.0.1")
     
