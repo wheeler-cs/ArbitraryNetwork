@@ -7,6 +7,7 @@ MSG_BLOCK = "BLOCK".encode("utf-8") # Connection attempt has been blocked
 MSG_EXIT  = "EXIT".encode("utf-8")  # Connection should close
 
 # Operation messages
+MSG_ECHO   = "ECHO".encode("utf-8")   # Have server send back message
 MSG_GETKEY = "GETKEY".encode("utf-8") # Request to obtain key
 MSG_ISKEY  = "ISKEY".encode("utf-8")  # Rest of message contains key
 MSG_DENY   = "DENY".encode("utf-8")   # Request has been denied

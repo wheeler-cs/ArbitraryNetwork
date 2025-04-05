@@ -1,6 +1,17 @@
+from PeerNode import PeerNode
+
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from dataclasses import dataclass
+from typing import Dict
+
+
+# ======================================================================================================================
+@dataclass
+class KeyPair:
+    public: rsa.RSAPublicKey   = None
+    private: rsa.RSAPrivateKey = None
 
 
 
@@ -9,14 +20,55 @@ class KeyStore(object):
     '''
     
     '''
-    def __init__(self, pub_file: str, priv_file: str) -> None:
+    def __init__(self) -> None:
         '''
         
         '''
-        self.public_key:  rsa.RSAPublicKey  = None
-        self.private_key: rsa.RSAPrivateKey = None
-        self.load_keys(public_key=pub_file, private_key=priv_file)
+        self.server_keypair:   KeyPair                          = KeyPair()
+        self.client_keypair:   KeyPair                          = KeyPair()
+        self.peer_public_keys: Dict[PeerNode, rsa.RSAPublicKey] = dict()
+
     
+    def load_server_keys(self, public_key: str, private_key: str) -> None:
+        '''
+        
+        '''
+        with open(public_key, "rb") as key_read:
+            self.server_keypair.public = serialization.load_pem_public_key(key_read.read(),
+                                                                           backend=default_backend())
+        with open(private_key, "rb") as key_read:
+            self.server_keypair.private = serialization.load_pem_private_key(key_read.read(),
+                                                                             password=None,
+                                                                             backend=default_backend())
+            
+    
+    def load_client_keys(self, public_key: str, private_key: str) -> None:
+        '''
+        
+        '''
+        # Load pem keys from files
+        with open(public_key, "rb") as key_read:
+            self.client_keypair.public = serialization.load_pem_public_key(key_read.read(),
+                                                                           backend=default_backend())
+        with open(private_key, "rb") as key_read:
+            self.client_keypair.private = serialization.load_pem_private_key(key_read.read(),
+                                                                             password=None,
+                                                                             backend=default_backend())
+            
+    
+    def add_peer(self, peer: PeerNode, key: None | rsa.RSAPublicKey) -> None:
+        '''
+        
+        '''
+        self.peer_public_keys[peer] = key
+
+
+    def print_peer_keystore(self) -> None:
+        '''
+        
+        '''
+        for peer in self.peer_public_keys:
+            print(str(peer) + " - " + str(self.peer_public_keys[peer]))
 
 
     def gen_keys(self, public_key:str, private_key: str) -> None:
@@ -37,23 +89,6 @@ class KeyStore(object):
             key_write.write(pem_priv)
         with open(public_key, "wb") as key_write:
             key_write.write(pem_pub)
-
-        
-    def load_keys(self, public_key: str, private_key: str) -> None:
-        '''
-        
-        '''
-        try:
-            # Load pem keys from files
-            with open(public_key, "rb") as key_read:
-                self.public_key = serialization.load_pem_public_key(key_read.read(), backend=default_backend())
-            with open(private_key, "rb") as key_read:
-                self.private_key = serialization.load_pem_private_key(key_read.read(),
-                                                                      password=None,
-                                                                      backend=default_backend())
-        except Exception as e:
-            print("[WARN] Could not load key files, generating new ones")
-            self.gen_keys(public_key, private_key)
         
 
     def encrypt(self, data: bytes, key) -> bytes:
