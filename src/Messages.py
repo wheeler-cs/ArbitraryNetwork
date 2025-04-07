@@ -1,6 +1,37 @@
 from dataclasses import dataclass
+from enum import Enum
 
 # Standardized message strings for networked communication
+# Messages where only the preamble is used and the body ignored
+class PreambleOnly(Enum):
+    MSG_HELLO   = 1 # Only ever issued by a client upon initial connection
+    MSG_BLOCK   = 2 # Connection attempt has been blocked
+    MSG_OKAY    = 3 # Last message sent was received
+    MSG_EXIT    = 4 # Connection is being closed by other endpoint
+    MSG_GETKEY  = 5 # Request to obtain receiver's public key
+    MSG_DENY    = 6 # Request has been denied by server
+    # Utility
+    MSG_NULLSTR = 7 # Null string, often sent by crashed clients
+    MSG_UNKNOWN = 8 # Server could not interpret provided message
+
+
+# Messages where the body contains additional information
+class BodyData(Enum):
+    MSG_ECHO  = 1 # Instruct receiver to echo back message
+    MSG_ISKEY = 2 # Body data is a public key
+    MSG_DATA  = 3 # Data is contained in the body
+
+
+# Message contains multiple fields or packets
+class MultiPacket(Enum):
+    MSG_FORWARD = 1 # Node should decrypt body and forward it
+    MSG_STOP    = 2 # Node is intended destination
+
+
+# DEBUG messages
+class DebugMessage(Enum):
+    MSG_SHUTDOWN = 1 # Instruct remote server to shutdown
+
 
 # Connection-related messages
 MSG_HELLO = "HELLO".encode("utf-8") # Only ever issued by a client upon initial connection
@@ -39,17 +70,17 @@ class Packet:
     _preamble: bytes = bytes()
     _body:     bytes = bytes()
 
-    def construct(self, preamble: bytes | str, body: bytes) -> None:
+    def construct(self, preamble: int, body: bytes | str) -> None:
         '''Changes the internal variables of the instance.
 
         Attributes:
-            preamble (bytes | str): Message to be stored in the preamble.
-            body (bytes): Body containing any needed data.
+            preamble (int): Message type to be stored in the preamble.
+            body (bytes | str): Data associated with the message type.
         
         '''
-        if(type(preamble) is str):
-            preamble = preamble.encode("utf-8")
-        self._preamble = preamble
+        self._preamble = bytes([preamble])
+        if(type(body) == str):
+            body = body.encode("utf-8")
         self._body = body
         
 
