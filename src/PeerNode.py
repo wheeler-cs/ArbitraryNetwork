@@ -5,7 +5,13 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 # ======================================================================================================================
 class PeerNode(object):
-    '''Class used maintain information about peer nodes.
+    '''Class used to maintain information about peer nodes.
+
+    Attributes:
+        _ip (str): IP address of associated node.
+        _port (int): Target port server component is running on.
+        _name (str): Customizable human-readable name for peer.
+        _is_core (bool): Flag indicating if the node is a trusted core member.
     
     '''
     def __init__(self, ip: str = "", port: int = 8192, name: str = "UNDEFINED", is_core = False) -> None:

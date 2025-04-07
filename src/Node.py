@@ -17,10 +17,12 @@ class Node(object):
     '''
     
     '''
-    def __init__(self, cfg_dir: str, port: int | None = None) -> None:
+    def __init__(self, cfg_dir: str, port: int | None = None, mode: str = "relay") -> None:
         '''
         
         '''
+        # Functionality information
+        self.mode:          str              = mode
         # Server variables
         self.server_port:   int              = port
         self.server_sock:   socket.socket    = None
@@ -32,10 +34,19 @@ class Node(object):
         # Cryptographic information
         self.keystore:      KeyStore         = KeyStore()
         # Initialization
-        self.load_server_cfg(path.join(cfg_dir, "server.json"))
-        self.load_client_cfg(path.join(cfg_dir, "client.json"))
+        self.load_cfg(path.join(cfg_dir, "server.json"), path.join(cfg_dir, "client.json"))
         self.init_components()
         self.start_threads()
+
+
+    def load_cfg(self, server_cfg: str, client_cfg: str) -> None:
+        '''
+        
+        '''
+        if((self.mode == "server") or (self.mode == "relay")):
+            self.load_server_cfg(server_cfg)
+        if((self.mode == "client") or (self.mode == "relay")):
+            self.load_client_cfg(client_cfg)
     
 
     def load_server_cfg(self, cfg_file: str) -> None:
@@ -69,10 +80,12 @@ class Node(object):
         
         '''
         # Initialize server
-        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_sock.bind(('', self.server_port))
+        if((self.mode == "server") or (self.mode == "relay")):
+            self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_sock.bind(('', self.server_port))
         # Initialize client
-        self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if((self.mode == "client") or (self.mode == "relay")):
+            self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 
     def contact_core(self) -> None:
@@ -86,7 +99,7 @@ class Node(object):
                 response = self.client_sock.recv(2048)
                 if(response == Messages.MSG_BLOCK):
                     print("[CLIENT] Peer blocked request for key")
-                    peer_key = ""
+                    peer_key = None
                 elif(response.decode("utf-8")[:5] == "ISKEY"):
                     # Need to get rid of "ISKEY" portion of packet and reencode
                     peer_key = (response.decode("utf-8")[5:]).encode("utf-8")
@@ -140,13 +153,20 @@ class Node(object):
         '''
         
         '''
-        self.server_thread = threading.Thread(target=self.run_server)
-        self.server_thread.start()
-        sleep(2) # Gives server thread time to start before cores on the same host contact it
-        self.contact_core()
-        self.connect(PeerNode(ip="127.0.0.1", port=7877))
-        self.client_as_terminal()
-        self.server_thread.join()
+        if(self.mode == "server"):
+            self.run_server()
+        elif(self.mode == "client"):
+            self.contact_core()
+            self.connect(PeerNode(ip="127.0.0.1", port=7877))
+            self.client_as_terminal()
+        else:
+            self.server_thread = threading.Thread(target=self.run_server)
+            self.server_thread.start()
+            sleep(2) # Gives server thread time to start before cores on the same host contact it
+            self.contact_core()
+            self.connect(PeerNode(ip="127.0.0.1", port=7877))
+            self.client_as_terminal()
+            self.server_thread.join()
 
 
     def run_server(self) -> None:
@@ -155,29 +175,33 @@ class Node(object):
         '''
         print(f"[SERVER] Running on port {self.server_port}")
         do_server = True
+        # Run server process
         while do_server:
             self.server_sock.listen(5)
             conn, addr = self.server_sock.accept()
             message = conn.recv(2048)
+            # NOTE: GETKEY closes connection immediately after sending key
             if(message == Messages.MSG_GETKEY):
                 response = Messages.MSG_ISKEY + self.keystore.server_keypair.public.public_bytes(encoding=serialization.Encoding.PEM,
                                                                                                  format=serialization.PublicFormat.SubjectPublicKeyInfo)
                 conn.send(response)
                 conn.close()
+            # NOTE: HELLO starts a new client dialog
             elif(message == Messages.MSG_HELLO):
                 print(f"[SERVER] Received connection from {addr}")
                 do_conn = True
+                # Run an active connection with client
                 while do_conn:
                     message = conn.recv(2048)
                     print(f"[SERVER] {addr}: {message.decode('utf-8')}")
-                    if(Messages.MSG_ECHO.decode("utf-8") == message.decode("utf-8")[:4]):
+                    if(Messages.MSG_ECHO.decode("utf-8") == message.decode("utf-8")[:4]): # Echo message to client
                         conn.send(message)
-                    elif(message == Messages.MSG_EXIT):
+                    elif(message == Messages.MSG_EXIT): # Client is disconnecting
                         do_conn = False
-                    elif(message == Messages.MSG_DBG_SHUTDOWN):
+                    elif(message == Messages.MSG_DBG_SHUTDOWN): # DEBUG: Shutdown server using client
                         do_conn = False
                         do_server = False
-                    else:
+                    else: # Message could not be interpreted
                         conn.send(Messages.MSG_UNKNOWN)
                 conn.close()
         print(f"[SERVER] Terminating operation")
@@ -208,9 +232,4 @@ def create_argv() -> argparse.Namespace:
 # ======================================================================================================================
 if __name__ == "__main__":
     argv = create_argv()
-    if(argv.mode == "server"):
-        pass
-    elif(argv.mode == "client"):
-        pass
-    else:
-        n = Node(argv.cfg_dir, argv.port)
+    n = Node(argv.cfg_dir, argv.port, argv.mode)

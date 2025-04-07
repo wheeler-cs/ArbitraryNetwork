@@ -10,7 +10,14 @@ from typing import Dict
 # ======================================================================================================================
 @dataclass
 class KeyPair:
-    public: rsa.RSAPublicKey   = None
+    '''Basic class for storing PKI key pairs.
+
+    Attributes:
+        public (rsa.RSAPublicKey): Public key for encryption.
+        private (rsa.RSAPrivateKey): Private key for decryption.
+    
+    '''
+    public:  rsa.RSAPublicKey  = None
     private: rsa.RSAPrivateKey = None
 
 
@@ -67,7 +74,6 @@ class KeyStore(object):
         '''
         
         '''
-        print(type(key))
         if(type(key) is bytes):
             key = serialization.load_pem_public_key(key, backend=default_backend())
         self.peer_public_keys[peer] = key
@@ -77,7 +83,7 @@ class KeyStore(object):
         '''
         
         '''
-        for peer in self.peer_public_keys:
+        for peer in self.peer_public_keys.keys():
             print(str(peer) + " - " + str(self.peer_public_keys[peer]))
 
 
