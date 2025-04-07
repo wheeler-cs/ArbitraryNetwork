@@ -63,6 +63,16 @@ class KeyStore(object):
         self.peer_public_keys[peer] = key
 
 
+    def set_peer_key(self, peer: PeerNode, key: bytes | rsa.RSAPublicKey) -> None:
+        '''
+        
+        '''
+        print(type(key))
+        if(type(key) is bytes):
+            key = serialization.load_pem_public_key(key, backend=default_backend())
+        self.peer_public_keys[peer] = key
+
+
     def print_peer_keystore(self) -> None:
         '''
         

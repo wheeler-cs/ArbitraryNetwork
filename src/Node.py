@@ -2,12 +2,14 @@ from KeyStore import KeyStore
 import Messages
 from PeerNode import PeerNode
 
+import argparse
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 import json
 from os import path
 import socket
 import threading
+from time import sleep
 from typing import Set
 
 
@@ -15,17 +17,16 @@ class Node(object):
     '''
     
     '''
-    def __init__(self, cfg_dir: str) -> None:
+    def __init__(self, cfg_dir: str, port: int | None = None) -> None:
         '''
         
         '''
         # Server variables
-        self.server_port:   int              = 0
+        self.server_port:   int              = port
         self.server_sock:   socket.socket    = None
         self.server_thread: threading.Thread = None
         # Client variables
         self.path_length:   int              = 0
-        self.peers:         Set[PeerNode]    = set()
         self.client_sock:   socket.socket    = None
         self.client_thread: threading.Thread = None
         # Cryptographic information
@@ -44,7 +45,8 @@ class Node(object):
         cfg_data = None
         with open(cfg_file, 'r') as server_cfg:
             cfg_data = json.load(server_cfg)
-        self.server_port = int(cfg_data["connection"]["port"])
+        if(self.server_port is None): # Handle port override from argv
+            self.server_port = int(cfg_data["connection"]["port"])
         self.keystore.load_server_keys(cfg_data["files"]["public_key"], cfg_data["files"]["private_key"])
 
     
@@ -69,6 +71,8 @@ class Node(object):
         # Initialize server
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_sock.bind(('', self.server_port))
+        # Initialize client
+        self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 
     def contact_core(self) -> None:
@@ -76,15 +80,35 @@ class Node(object):
         
         '''
         for peer in self.keystore.peer_public_keys.keys():
-            self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.client_sock.connect((peer.ip, peer.port))
-            self.client_sock.send(Messages.MSG_GETKEY)
-            response = self.client_sock.recv(2048)
-            if(response == Messages.MSG_BLOCK):
-                print("[WARN] Peer blocked request for key")
-            elif(response.decode("utf-8")[:5] == "ISKEY"):
-                peer_key = response.decode()[5:]
-                print(peer_key)
+            try:
+                self.client_sock.connect((peer.ip, peer.port))
+                self.client_sock.send(Messages.MSG_GETKEY)
+                response = self.client_sock.recv(2048)
+                if(response == Messages.MSG_BLOCK):
+                    print("[CLIENT] Peer blocked request for key")
+                    peer_key = ""
+                elif(response.decode("utf-8")[:5] == "ISKEY"):
+                    # Need to get rid of "ISKEY" portion of packet and reencode
+                    peer_key = (response.decode("utf-8")[5:]).encode("utf-8")
+                self.client_sock.close()
+                self.keystore.set_peer_key(PeerNode(ip=peer.ip, port=peer.port), peer_key)
+            except Exception as e:
+                print(f"[CLIENT] Unable to contact {peer.ip}:{peer.port} in core")
+                print(f"         |-> {e}")
+        self.keystore.print_peer_keystore()
+
+
+    def connect(self, target: PeerNode) -> None:
+        '''
+        
+        '''
+        self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.client_sock.connect((target.ip, target.port))
+            self.client_sock.send(Messages.MSG_HELLO)
+        except Exception as e:
+            print("[CLIENT] Unable to connect with server")
+            print(f"        |-> {e}")
 
     
     def client_as_terminal(self) -> None:
@@ -98,10 +122,18 @@ class Node(object):
                 self.client_sock.send(Messages.MSG_EXIT)
                 self.client_sock.close()
                 do_terminal = False
+            elif(message == "SHUTDOWN"):
+                self.client_sock.send(Messages.MSG_DBG_SHUTDOWN)
+                self.client_sock.close()
+                do_terminal = False
             elif("ECHO" in message):
                 self.client_sock.send(message.encode("utf-8"))
-            response = self.client_sock.recv(2048)
-            print(f"[CLIENT] {response.decode('utf-8')}")
+                response = self.client_sock.recv(2048)
+                print(f"[CLIENT] Server Echo: {response.decode('utf-8')}")
+            else:
+                self.client_sock.send(message.encode("utf-8"))
+                response = self.client_sock.recv(2048)
+                print(f"[CLIENT] Server Responded: {response.decode('utf-8')}")
     
     
     def start_threads(self) -> None:
@@ -110,7 +142,9 @@ class Node(object):
         '''
         self.server_thread = threading.Thread(target=self.run_server)
         self.server_thread.start()
+        sleep(2) # Gives server thread time to start before cores on the same host contact it
         self.contact_core()
+        self.connect(PeerNode(ip="127.0.0.1", port=7877))
         self.client_as_terminal()
         self.server_thread.join()
 
@@ -119,7 +153,9 @@ class Node(object):
         '''
         
         '''
-        while True:
+        print(f"[SERVER] Running on port {self.server_port}")
+        do_server = True
+        while do_server:
             self.server_sock.listen(5)
             conn, addr = self.server_sock.accept()
             message = conn.recv(2048)
@@ -128,23 +164,53 @@ class Node(object):
                                                                                                  format=serialization.PublicFormat.SubjectPublicKeyInfo)
                 conn.send(response)
                 conn.close()
-            else:
+            elif(message == Messages.MSG_HELLO):
+                print(f"[SERVER] Received connection from {addr}")
                 do_conn = True
-                #conn.send(Messages.MSG_HELLO)
                 while do_conn:
                     message = conn.recv(2048)
-                    print(f"[SERVER] {message.decode('utf-8')}")
-                    if(Messages.MSG_ECHO.decode("utf-8") == message.decode()[:4]):
+                    print(f"[SERVER] {addr}: {message.decode('utf-8')}")
+                    if(Messages.MSG_ECHO.decode("utf-8") == message.decode("utf-8")[:4]):
                         conn.send(message)
                     elif(message == Messages.MSG_EXIT):
                         do_conn = False
+                    elif(message == Messages.MSG_DBG_SHUTDOWN):
+                        do_conn = False
+                        do_server = False
                     else:
                         conn.send(Messages.MSG_UNKNOWN)
                 conn.close()
+        print(f"[SERVER] Terminating operation")
 
 
+# ======================================================================================================================
+def create_argv() -> argparse.Namespace:
+    '''
+    
+    '''
+    parser = argparse.ArgumentParser(prog="Arbitrary Network",
+                                     description="Arbitrary anonymization network",)
+    parser.add_argument("--cfg_dir",
+                        help="Directory containing configuration files",
+                        type=str,
+                        default="./cfg")
+    parser.add_argument("-p", "--port",
+                        help="Port override for server",
+                        type=int,)
+    parser.add_argument("-m", "--mode",
+                        help="Mode override",
+                        type=str,
+                        choices=["server", "client", "relay"],
+                        default="relay")
+    return parser.parse_args()
 
 
 # ======================================================================================================================
 if __name__ == "__main__":
-    n = Node("./cfg")
+    argv = create_argv()
+    if(argv.mode == "server"):
+        pass
+    elif(argv.mode == "client"):
+        pass
+    else:
+        n = Node(argv.cfg_dir, argv.port)

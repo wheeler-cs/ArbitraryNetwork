@@ -15,3 +15,6 @@ MSG_DENY   = "DENY".encode("utf-8")   # Request has been denied
 # Utility messages
 MSG_NULLSTR = "".encode("utf-8")    # Returned by crashed clients
 MSG_UNKNOWN = "???".encode("utf-8") # Unknown message response
+
+# Debugging
+MSG_DBG_SHUTDOWN = "DBG_SHUTDOWN".encode("utf-8") # Instruct remote server to shutdown
