@@ -12,9 +12,10 @@ class PreambleOnly(Enum):
     MSG_EXIT    = 4 # Connection is being closed by other endpoint
     MSG_GETKEY  = 5 # Request to obtain receiver's public key
     MSG_DENY    = 6 # Request has been denied by server
+    MSG_PEERS   = 7 # Get a list of peers connected to remote node
     # Utility
-    MSG_NULLSTR = 7 # Null string, often sent by crashed clients
-    MSG_UNKNOWN = 8 # Server could not interpret provided message
+    MSG_NULLSTR = 8 # Null string, often sent by crashed clients
+    MSG_UNKNOWN = 9 # Server could not interpret provided message
 
 
 # Messages where the body contains additional information

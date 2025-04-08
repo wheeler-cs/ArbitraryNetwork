@@ -22,6 +22,7 @@ class Node(object):
         '''
         # Functionality information
         self.mode:          str              = mode
+        self.route:         list[PeerNode]   = list()
         # Server variables
         self.server_port:   int              = port
         self.server_sock:   socket.socket    = None
@@ -124,6 +125,24 @@ class Node(object):
             print("[CLIENT] Unable to connect with server")
             print(f"        |-> {e}")
 
+
+    def list_peers(self) -> None:
+        '''
+        
+        '''
+        for peer in self.keystore.peer_public_keys.keys():
+            print(peer)
+
+    
+    def show_route(self) -> None:
+        '''
+        
+        '''
+        print("[CLIENT] Current route:")
+        for peer in self.route:
+            print('\t' + peer)
+
+
     
     def client_as_terminal(self) -> None:
         '''
@@ -148,6 +167,10 @@ class Node(object):
                 self.client_sock.send(data_packet.pack())
                 data_packet.unpack(self.client_sock.recv(2048))
                 print(f"[CLIENT] Server Echo: {data_packet.body}")
+            elif(message == "LIST"):
+                self.list_peers()
+            elif(message == "ROUTE"):
+                self.show_route()
             else:
                 data_packet.construct(Messages.BodyData.MSG_DATA, message)
                 self.client_sock.send(data_packet.pack())
@@ -168,7 +191,7 @@ class Node(object):
         else:
             self.server_thread = threading.Thread(target=self.run_server)
             self.server_thread.start()
-            sleep(2) # Gives server thread time to start before cores on the same host contact it
+            sleep(1) # Gives server thread time to start before cores on the same host contact it
             self.contact_core()
             self.connect(PeerNode(ip="127.0.0.1", port=7877))
             self.client_as_terminal()
