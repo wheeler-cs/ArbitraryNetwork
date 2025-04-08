@@ -10,7 +10,6 @@ from os import path
 import socket
 import threading
 from time import sleep
-from typing import Set
 
 
 class Node(object):
@@ -92,23 +91,23 @@ class Node(object):
         '''
         
         '''
+        data_packet = Messages.Packet()
         for peer in self.keystore.peer_public_keys.keys():
-            try:
-                self.client_sock.connect((peer.ip, peer.port))
-                self.client_sock.send(Messages.MSG_GETKEY)
-                response = self.client_sock.recv(2048)
-                if(response == Messages.MSG_BLOCK):
-                    print("[CLIENT] Peer blocked request for key")
-                    peer_key = None
-                elif(response.decode("utf-8")[:5] == "ISKEY"):
-                    # Need to get rid of "ISKEY" portion of packet and reencode
-                    peer_key = (response.decode("utf-8")[5:]).encode("utf-8")
-                self.client_sock.close()
-                self.keystore.set_peer_key(PeerNode(ip=peer.ip, port=peer.port), peer_key)
-            except Exception as e:
-                print(f"[CLIENT] Unable to contact {peer.ip}:{peer.port} in core")
-                print(f"         |-> {e}")
-        self.keystore.print_peer_keystore()
+            print(f"[CLIENT] Requesting key from {peer.ip}")
+            # Connect to peer
+            self.client_sock.connect((peer.ip, peer.port))
+            # Send request for key and await response
+            data_packet.construct(Messages.PreambleOnly.MSG_GETKEY, "")
+            self.client_sock.send(data_packet.pack())
+            data_packet.unpack(self.client_sock.recv(2048))
+            if(data_packet._preamble == Messages.PreambleOnly.MSG_BLOCK.value):
+                print("[CLIENT] Peer blocked request for key")
+                peer_key = None
+            elif(data_packet._preamble == Messages.BodyData.MSG_ISKEY.value):
+                # Need to get rid of "ISKEY" portion of packet and reencode
+                peer_key = data_packet._body
+            self.client_sock.close()
+            self.keystore.set_peer_key(PeerNode(ip=peer.ip, port=peer.port), peer_key)
 
 
     def connect(self, target: PeerNode) -> None:
@@ -116,9 +115,11 @@ class Node(object):
         
         '''
         self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        data_packet = Messages.Packet()
         try:
             self.client_sock.connect((target.ip, target.port))
-            self.client_sock.send(Messages.MSG_HELLO)
+            data_packet.construct(Messages.PreambleOnly.MSG_HELLO, '')
+            self.client_sock.send(data_packet.pack())
         except Exception as e:
             print("[CLIENT] Unable to connect with server")
             print(f"        |-> {e}")
@@ -129,24 +130,29 @@ class Node(object):
         
         '''
         do_terminal = True
+        data_packet = Messages.Packet()
         while do_terminal:
             message = input("> ")
             if(message == "EXIT"):
-                self.client_sock.send(Messages.MSG_EXIT)
+                data_packet.construct(Messages.PreambleOnly.MSG_EXIT, '')
+                self.client_sock.send(data_packet.pack())
                 self.client_sock.close()
                 do_terminal = False
             elif(message == "SHUTDOWN"):
-                self.client_sock.send(Messages.MSG_DBG_SHUTDOWN)
+                data_packet.construct(Messages.DebugMessage.MSG_SHUTDOWN, '')
+                self.client_sock.send(data_packet.pack())
                 self.client_sock.close()
                 do_terminal = False
-            elif("ECHO" in message):
-                self.client_sock.send(message.encode("utf-8"))
-                response = self.client_sock.recv(2048)
-                print(f"[CLIENT] Server Echo: {response.decode('utf-8')}")
+            elif(message[:5] == "ECHO "):
+                data_packet.construct(Messages.BodyData.MSG_ECHO, message[5:])
+                self.client_sock.send(data_packet.pack())
+                data_packet.unpack(self.client_sock.recv(2048))
+                print(f"[CLIENT] Server Echo: {data_packet.body}")
             else:
-                self.client_sock.send(message.encode("utf-8"))
-                response = self.client_sock.recv(2048)
-                print(f"[CLIENT] Server Responded: {response.decode('utf-8')}")
+                data_packet.construct(Messages.BodyData.MSG_DATA, message)
+                self.client_sock.send(data_packet.pack())
+                data_packet.unpack(self.client_sock.recv(2048))
+                print(f"[CLIENT] Server Responded: {data_packet.body}")
     
     
     def start_threads(self) -> None:
@@ -175,35 +181,43 @@ class Node(object):
         '''
         print(f"[SERVER] Running on port {self.server_port}")
         do_server = True
+        data_packet = Messages.Packet()
         # Run server process
         while do_server:
             self.server_sock.listen(5)
             conn, addr = self.server_sock.accept()
-            message = conn.recv(2048)
+            data_packet.unpack(conn.recv(2048))
             # NOTE: GETKEY closes connection immediately after sending key
-            if(message == Messages.MSG_GETKEY):
-                response = Messages.MSG_ISKEY + self.keystore.server_keypair.public.public_bytes(encoding=serialization.Encoding.PEM,
-                                                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo)
-                conn.send(response)
+            if(data_packet.preamble == Messages.PreambleOnly.MSG_GETKEY.value):
+                print(f"[SERVER] Received key request from {addr}")
+                data_packet.construct(Messages.BodyData.MSG_ISKEY, self.keystore.server_keypair.public.public_bytes(encoding=serialization.Encoding.PEM,
+                                                                                                                    format=serialization.PublicFormat.SubjectPublicKeyInfo))
+                conn.send(data_packet.pack())
                 conn.close()
             # NOTE: HELLO starts a new client dialog
-            elif(message == Messages.MSG_HELLO):
+            elif(data_packet.preamble == Messages.PreambleOnly.MSG_HELLO.value):
                 print(f"[SERVER] Received connection from {addr}")
                 do_conn = True
                 # Run an active connection with client
                 while do_conn:
-                    message = conn.recv(2048)
-                    print(f"[SERVER] {addr}: {message.decode('utf-8')}")
-                    if(Messages.MSG_ECHO.decode("utf-8") == message.decode("utf-8")[:4]): # Echo message to client
-                        conn.send(message)
-                    elif(message == Messages.MSG_EXIT): # Client is disconnecting
+                    data_packet.unpack(conn.recv(2048))
+                    print(f"[SERVER] {addr}: {data_packet}")
+                    if(data_packet.preamble == Messages.BodyData.MSG_ECHO.value): # Echo message to client
+                        conn.send(data_packet.pack())
+                    elif(data_packet.preamble == Messages.PreambleOnly.MSG_EXIT.value): # Client is disconnecting
                         do_conn = False
-                    elif(message == Messages.MSG_DBG_SHUTDOWN): # DEBUG: Shutdown server using client
+                    elif(data_packet.preamble == Messages.DebugMessage.MSG_SHUTDOWN.value): # DEBUG: Shutdown server using client
                         do_conn = False
                         do_server = False
                     else: # Message could not be interpreted
-                        conn.send(Messages.MSG_UNKNOWN)
+                        data_packet.construct(Messages.PreambleOnly.MSG_UNKNOWN, '')
+                        conn.send(data_packet.pack())
                 conn.close()
+            else:
+                print(f"[SERVER] Received unknown packet type from client")
+                print(f"         |-> {data_packet}")
+                data_packet.construct(Messages.PreambleOnly.MSG_UNKNOWN, '')
+                conn.send(data_packet.pack())
         print(f"[SERVER] Terminating operation")
 
 
@@ -224,7 +238,7 @@ def create_argv() -> argparse.Namespace:
     parser.add_argument("-m", "--mode",
                         help="Mode override",
                         type=str,
-                        choices=["server", "client", "relay"],
+                        choices=["server", "client", "relay", "keygen"],
                         default="relay")
     return parser.parse_args()
 
@@ -232,4 +246,9 @@ def create_argv() -> argparse.Namespace:
 # ======================================================================================================================
 if __name__ == "__main__":
     argv = create_argv()
-    n = Node(argv.cfg_dir, argv.port, argv.mode)
+    if(argv.mode == "keygen"):
+        kgen = KeyStore()
+        kgen.gen_keys("keys/server.pub", "keys/server.priv")
+        kgen.gen_keys("keys/client.pub", "keys/client.priv")
+    else:
+        n = Node(argv.cfg_dir, argv.port, argv.mode)
