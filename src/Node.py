@@ -10,25 +10,41 @@ from os import path
 import socket
 import threading
 from time import sleep
+from typing import List, Union
 
 
 class Node(object):
-    '''
+    '''Node class that enables bi-directional communication with remote hosts.
+
+    Attributes:
+        mode (str): The mode of operation in which the instance should be ran. Will normally be set
+                    to "relay" most of the time.
+        route (list[PeerNode.PeerNode]): The route the client component will use when sending data
+                                         to the desired destination.
+        server_port (int): The port at which the server component can be reached.
+        server_sock (socket.socket): The socket object for the server through which network data is
+                                     passed.
+        server_thread (threading.Thread): Secondary thread the server component will run on
+                                          separately from the client.
+        client_socket (socket.socket): Socket object over which client will send outgoing data.
+        client_thread (threading.Thread): Secondary thread the client will run on separately from
+                                          the server.
+        keystore (Keystore.Keystore): Keystore object holding all public keys of peers and private
+                                      keys of server and client components.
     
     '''
-    def __init__(self, cfg_dir: str, port: int | None = None, mode: str = "relay") -> None:
+    def __init__(self, cfg_dir: str, port: Union[int, None] = None, mode: str = "relay") -> None:
         '''
         
         '''
         # Functionality information
         self.mode:          str              = mode
-        self.route:         list[PeerNode]   = list()
+        self.route:         List[PeerNode]   = list()
         # Server variables
         self.server_port:   int              = port
         self.server_sock:   socket.socket    = None
         self.server_thread: threading.Thread = None
         # Client variables
-        self.path_length:   int              = 0
         self.client_sock:   socket.socket    = None
         self.client_thread: threading.Thread = None
         # Cryptographic information
@@ -40,7 +56,11 @@ class Node(object):
 
 
     def load_cfg(self, server_cfg: str, client_cfg: str) -> None:
-        '''
+        '''Load configuration data for server and client from files.
+
+        Parameters:
+            server_cfg (str): File path for server configuration file.
+            client_cfg (str): File path for client configuration file.
         
         '''
         if((self.mode == "server") or (self.mode == "relay")):
@@ -50,7 +70,10 @@ class Node(object):
     
 
     def load_server_cfg(self, cfg_file: str) -> None:
-        '''
+        '''Load configuration data for server from file.
+
+        Parameters:
+            cfg_file (str): File path for configuration file.
         
         '''
         cfg_data = None
@@ -62,7 +85,10 @@ class Node(object):
 
     
     def load_client_cfg(self, cfg_file: str) -> None:
-        '''
+        '''Load configuration data for client from file.
+
+        Parameters:
+            cfg_file (str): File path for configuration file.
 
         '''
         cfg_data = None
@@ -76,7 +102,7 @@ class Node(object):
 
 
     def init_components(self) -> None:
-        '''
+        '''Initialize networked components for Node instance.
         
         '''
         # Initialize server
@@ -89,7 +115,7 @@ class Node(object):
 
 
     def contact_core(self) -> None:
-        '''
+        '''Contact all members designated as core nodes for their public keys.
         
         '''
         data_packet = Messages.Packet()
@@ -112,7 +138,10 @@ class Node(object):
 
 
     def connect(self, target: PeerNode) -> None:
-        '''
+        '''Open an outgoing connection to a specified peer.
+
+        Parameters:
+            target (PeerNode): Target peer node to be connected to.
         
         '''
         self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -127,7 +156,7 @@ class Node(object):
 
 
     def list_peers(self) -> None:
-        '''
+        '''Print a list of peers that are currently known to exist.
         
         '''
         for peer in self.keystore.peer_public_keys.keys():
@@ -135,17 +164,31 @@ class Node(object):
 
     
     def show_route(self) -> None:
-        '''
+        '''Print the current route the client has chosen.
         
         '''
         print("[CLIENT] Current route:")
         for peer in self.route:
-            print('\t' + peer)
+            print('\t' + str(peer))
+
+    
+    def route_peer(self, ip: str, port: int) -> None:
+        '''Add a peer to the route using their IP address and target port.
+
+        Parameters:
+            ip (str): The IP address of the designated peer.
+            port (int): The port at which the peer will be contacted through.
+        
+        '''
+        peer = self.keystore.get_peer(PeerNode(ip, port))
+        if(peer is not None):
+            self.route.append(peer)
 
 
     
     def client_as_terminal(self) -> None:
-        '''
+        '''Operate the client as a terminal while connected to the server. This allows the client to
+        issue a number of predefined commands directly to the destination.
         
         '''
         do_terminal = True
@@ -171,6 +214,10 @@ class Node(object):
                 self.list_peers()
             elif(message == "ROUTE"):
                 self.show_route()
+            elif(message[:4] == "HOP "):
+                ip, port = message[4:].split(':')
+                port = int(port)
+                self.route_peer(ip, port)
             else:
                 data_packet.construct(Messages.BodyData.MSG_DATA, message)
                 self.client_sock.send(data_packet.pack())
@@ -179,9 +226,10 @@ class Node(object):
     
     
     def start_threads(self) -> None:
-        '''
+        '''Start the thread to run the server separately from the client.
         
         '''
+        # TODO: Implement a `run_client()` method
         if(self.mode == "server"):
             self.run_server()
         elif(self.mode == "client"):
@@ -199,7 +247,7 @@ class Node(object):
 
 
     def run_server(self) -> None:
-        '''
+        '''Run the server component of the Node, which communicates with incoming clients.
         
         '''
         print(f"[SERVER] Running on port {self.server_port}")
@@ -246,7 +294,10 @@ class Node(object):
 
 # ======================================================================================================================
 def create_argv() -> argparse.Namespace:
-    '''
+    '''Parse the command line arguments passed in with the program.
+
+    Returns:
+        A namespace through which arguments can be accessed.
     
     '''
     parser = argparse.ArgumentParser(prog="Arbitrary Network",

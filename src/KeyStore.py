@@ -4,7 +4,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Union
 
 
 # ======================================================================================================================
@@ -24,11 +24,19 @@ class KeyPair:
 
 # ======================================================================================================================
 class KeyStore(object):
-    '''
+    '''Object designated to store all public and private keys for a session.
+
+    Attributes:
+        server_keypair (KeyPair): Key pair containing the public and private keys of the server component.
+        client_keypair (KeyPair): Key pair containing the public and private keys of the client component.
+        peer_public_keys (Dict[PeerNode, rsa.RSAPublicKey]): Peer nodes and their associated public key.
+    
+    Note:
+        A dictionary is used for the Peer-Key pairings so a peer is not included twice.
     
     '''
     def __init__(self) -> None:
-        '''
+        '''Initializer for KeyStore class. Instantiates empty member data.
         
         '''
         self.server_keypair:   KeyPair                          = KeyPair()
@@ -37,7 +45,11 @@ class KeyStore(object):
 
     
     def load_server_keys(self, public_key: str, private_key: str) -> None:
-        '''
+        '''Load the public and private keys associated with the server.
+
+        Parameters:
+            public_key (str): Path to the file containing the public key of the server.
+            private_key (str): Path to the file containing the private key of the server.
         
         '''
         with open(public_key, "rb") as key_read:
@@ -50,7 +62,11 @@ class KeyStore(object):
             
     
     def load_client_keys(self, public_key: str, private_key: str) -> None:
-        '''
+        '''Load the public and private keys for the client.
+
+        Parameters:
+            public_key (str): Path to the file containing the public key for the client.
+            private_key (str): Path to the file containing the private key for the client.
         
         '''
         # Load pem keys from files
@@ -63,15 +79,26 @@ class KeyStore(object):
                                                                              backend=default_backend())
             
     
-    def add_peer(self, peer: PeerNode, key: None | rsa.RSAPublicKey) -> None:
-        '''
+    def add_peer(self, peer: PeerNode, key: Union[rsa.RSAPublicKey, None]) -> None:
+        '''Add a new peer and their public key to the keystore.
+
+        Parameters:
+            peer (PeerNode.PeerNode): Data about the new peer being added.
+            key (None | rsa.RSAPublicKey): Contains either the public key of the peer being added to
+                                           the list or None when that information is not yet known.
         
         '''
         self.peer_public_keys[peer] = key
 
 
-    def set_peer_key(self, peer: PeerNode, key: bytes | rsa.RSAPublicKey) -> None:
-        '''
+    def set_peer_key(self, peer: PeerNode, key: Union[bytes, rsa.RSAPublicKey]) -> None:
+        '''Sets the public key for a given peer.
+
+        Parameters:
+            peer (PeerNode.PeerNode): Desired node to have the key associated with.
+            key (bytes | rsa.RSAPublicKey): The public key to be associated with the host specified.
+                                            If the parameter is of type `bytes`, then it will be
+                                            converted into `rsa.RSAPublicKey`.
         
         '''
         if(type(key) is bytes):
@@ -80,15 +107,39 @@ class KeyStore(object):
 
 
     def print_peer_keystore(self) -> None:
-        '''
+        '''Prints information about all of the peers in a keystore.
         
         '''
         for peer in self.peer_public_keys.keys():
             print(str(peer) + " - " + str(self.peer_public_keys[peer]))
 
+    
+    def get_peer(self, p: PeerNode) -> Union[PeerNode, None]:
+        '''Finds a `PeerNode` in the Peer-Public Key dictionary with the same IP address and port as
+           the one provided.
+
+        Parameters:
+            p (PeerNode.PeerNode): `PeerNode` initialized with an IP and port to be searched for in
+                                   the keystore's database.
+        
+        Returns:
+            An instance of `PeerNode` if the desired IP and port were found, and `None` if the
+            keystore doesn't have any relevant peers.
+        
+        '''
+        for peer in self.peer_public_keys.keys():
+            if(p == peer):
+                return peer
+        return None
+
+
 
     def gen_keys(self, public_key:str, private_key: str) -> None:
-        '''
+        '''Generates a private key and its derived public key and stores the pair in seperate files.
+
+        Parameters:
+            public_key (str): The file path the public key's data will be written to.
+            private_key (str): The file path the private key's data will be written to.
         
         '''
         # Create keys
@@ -131,4 +182,4 @@ class KeyStore(object):
 
 # ======================================================================================================================
 if __name__ == "__main__":
-    print("[ERR] Cannot run KeyStore as standalone instance")
+    raise(NotImplementedError("KeyStore is not designed to be ran as a stand-alone object"))

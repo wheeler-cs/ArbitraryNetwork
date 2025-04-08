@@ -1,38 +1,53 @@
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, auto
 from struct import pack, unpack
 
+
+'''
+I hate how Python implements enums...
+'''
+
 # Standardized message strings for networked communication
-# Messages where only the preamble is used and the body ignored
 class PreambleOnly(Enum):
-    MSG_NONE    = 0 # Packet is not associated with a message
-    MSG_HELLO   = 1 # Only ever issued by a client upon initial connection
-    MSG_BLOCK   = 2 # Connection attempt has been blocked
-    MSG_OKAY    = 3 # Last message sent was received
-    MSG_EXIT    = 4 # Connection is being closed by other endpoint
-    MSG_GETKEY  = 5 # Request to obtain receiver's public key
-    MSG_DENY    = 6 # Request has been denied by server
-    MSG_PEERS   = 7 # Get a list of peers connected to remote node
+    '''Packets of this type ignore all data stored in the body portion.
+    
+    '''
+    MSG_NONE    = auto() # Packet is not associated with a message
+    MSG_HELLO   = auto() # Only ever issued by a client upon initial connection
+    MSG_BLOCK   = auto() # Connection attempt has been blocked
+    MSG_OKAY    = auto() # Last message sent was received
+    MSG_EXIT    = auto() # Connection is being closed by other endpoint
+    MSG_GETKEY  = auto() # Request to obtain receiver's public key
+    MSG_DENY    = auto() # Request has been denied by server
+    MSG_PEERS   = auto() # Get a list of peers connected to remote node
     # Utility
-    MSG_NULLSTR = 8 # Null string, often sent by crashed clients
-    MSG_UNKNOWN = 9 # Server could not interpret provided message
+    MSG_NULLSTR = auto() # Null string, often sent by crashed clients
+    MSG_UNKNOWN = auto() # Server could not interpret provided message
+    PREAMBLEONLY_END = auto()
 
 
-# Messages where the body contains additional information
 class BodyData(Enum):
-    MSG_ECHO  =  9 # Instruct receiver to echo back message
-    MSG_ISKEY = 10 # Body data is a public key
-    MSG_DATA  = 11 # Data is contained in the body
+    '''Data inside the packet body is relevant to the desired operation.
+    
+    '''
+    MSG_ECHO  = PreambleOnly.PREAMBLEONLY_END.value # Instruct receiver to echo back message
+    MSG_ISKEY = auto() # Body data is a public key
+    MSG_DATA  = auto() # Data is contained in the body
+    BODYDATA_END = auto()
 
 
-# Message contains multiple fields or packets
 class MultiPacket(Enum):
-    MSG_FORWARD = 12 # Node should decrypt body and forward it
-    MSG_STOP    = 13 # Node is intended destination
+    '''Body field of packet contains other packets.
+    
+    '''
+    MSG_FORWARD = BodyData.BODYDATA_END.value # Node should decrypt body and forward it
+    MSG_STOP    = auto() # Node is intended destination
 
 
-# DEBUG messages
 class DebugMessage(Enum):
+    '''DEBUG messages not intended for regular use.
+    
+    '''
     MSG_SHUTDOWN = 100 # Instruct remote server to shutdown
 
 
@@ -46,7 +61,7 @@ class Packet:
         _body (bytes): The primary data body containing all information, if any.
 
     '''
-    _preamble: int   = PreambleOnly.MSG_NONE
+    _preamble: int   = PreambleOnly.MSG_NONE.value
     _body:     bytes = bytes()
 
 
@@ -83,6 +98,7 @@ class Packet:
         self.construct(preamble, body)
 
 
+    # Accessors and Mutators -----------------------------------------------------------------------
     @property
     def preamble(self) -> int:
         return self._preamble
@@ -107,6 +123,7 @@ class Packet:
         self._body = b
 
     
+    # Overrides ------------------------------------------------------------------------------------
     def __str__(self) -> str:
         return(f"[{self.preamble}, {self.body}]")
 
