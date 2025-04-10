@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 import json
 from os import path
+import random
 import socket
 import threading
 from time import sleep
@@ -105,13 +106,17 @@ class Node(object):
         '''Initialize networked components for Node instance.
         
         '''
-        # Initialize server
-        if((self.mode == "server") or (self.mode == "relay")):
-            self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.server_sock.bind(('', self.server_port))
-        # Initialize client
-        if((self.mode == "client") or (self.mode == "relay")):
-            self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            # Initialize server
+            if((self.mode == "server") or (self.mode == "relay")):
+                self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.server_sock.bind(('', self.server_port))
+            # Initialize client
+            if((self.mode == "client") or (self.mode == "relay")):
+                self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        except OSError as ose:
+            print(f"Port {self.server_port} is already bound to a process")
+            exit()
 
 
     def contact_core(self) -> None:
@@ -172,7 +177,15 @@ class Node(object):
             print('\t' + str(peer))
 
     
-    def route_peer(self, ip: str, port: int) -> None:
+    def clear_route(self) -> None:
+        '''Unroute all peers.
+        
+        '''
+        print("[CLIENT] Unrouted all peers")
+        self.route.clear()
+
+    
+    def route_peer(self, peer: PeerNode) -> None:
         '''Add a peer to the route using their IP address and target port.
 
         Parameters:
@@ -180,9 +193,56 @@ class Node(object):
             port (int): The port at which the peer will be contacted through.
         
         '''
-        peer = self.keystore.get_peer(PeerNode(ip, port))
+        peer = self.keystore.get_peer(peer) # Get version of the peer stored
         if(peer is not None):
             self.route.append(peer)
+
+    
+    def auto_route(self, depth: int) -> None:
+        '''Automatically create a route of a given size.
+
+        Parameters:
+            depth (int): The number of members involved in the transfer.
+        
+        '''
+        if((type(depth) is int) and (depth > 0)):
+            self.route = random.sample(list(self.keystore.peer_public_keys.keys()), k=depth)
+        else:
+            raise(ValueError("Route size must be a positive integer"))
+        
+
+    def hello_packet(self, transfer_size: int = 0) -> Messages.Packet:
+        '''Craft a multi-layered, encrypted packet to check if route can send data.
+        
+        Returns:
+            Multi-layer "hello" packet used in transmission.
+        '''
+        # Create inner-most packet for destination
+        stop_packet = Messages.Packet(Messages.MultiPacket.MSG_STOP.value, self.route[-1].ip, self.route[-1].port, transfer_size, b'')
+        stop_packet = self.keystore.encrypt_packet(stop_packet, self.route[-1])
+        # Wrap destination packet in layers of encryption
+        rev_peers = list(reversed(self.route[:-1]))
+        layer = stop_packet
+        for hop in rev_peers:
+            layer = Messages.Packet(Messages.MultiPacket.MSG_FORWARD, hop.ip, hop.port, 0, layer)
+            layer = self.keystore.encrypt_packet(layer, hop)
+        return Messages.Packet(Messages.MultiPacket.MSG_FORWARD, self.route[0].ip, self.route[0].port, 0, layer)
+
+
+    
+    def layer_packet(self, data: str | bytes) -> Messages.Packet:
+        '''
+        
+        '''
+        # Convert string data to bytes
+        if(type(data) is str):
+            data = data.encode("utf-8")
+        # Encryption order is backwards to the routing order
+        rev_peers = list(reversed(self.route))
+        packet = Messages.Packet(Messages.MultiPacket.MSG_STOP, data)
+        packet = self.keystore.encrypt_packet(packet, rev_peers[-1])
+        # TODO: Implement the rest of the encryption
+
 
 
     
@@ -194,6 +254,7 @@ class Node(object):
         do_terminal = True
         data_packet = Messages.Packet()
         while do_terminal:
+            # Get output from user and handle each case accordingly
             message = input("> ")
             if(message == "EXIT"):
                 data_packet.construct(Messages.PreambleOnly.MSG_EXIT, '')
@@ -214,10 +275,22 @@ class Node(object):
                 self.list_peers()
             elif(message == "ROUTE"):
                 self.show_route()
+            elif(message == "CLEAR"):
+                self.clear_route()
             elif(message[:4] == "HOP "):
                 ip, port = message[4:].split(':')
                 port = int(port)
-                self.route_peer(ip, port)
+                self.route_peer(PeerNode(ip, port))
+            elif(message[:10] == "AUTOROUTE "):
+                depth = int(message[10:])
+                self.auto_route(depth)
+            elif(message == "HELLO"):
+                packet = self.hello_packet()
+                print(len(packet._body))
+                print(packet._body)
+            elif(message[:5] == "SEND "):
+                data = message[5:]
+                packet = self.layer_packet(data)
             else:
                 data_packet.construct(Messages.BodyData.MSG_DATA, message)
                 self.client_sock.send(data_packet.pack())

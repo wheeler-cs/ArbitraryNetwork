@@ -12,17 +12,19 @@ class PreambleOnly(Enum):
     '''Packets of this type ignore all data stored in the body portion.
     
     '''
-    MSG_NONE    = auto() # Packet is not associated with a message
-    MSG_HELLO   = auto() # Only ever issued by a client upon initial connection
-    MSG_BLOCK   = auto() # Connection attempt has been blocked
-    MSG_OKAY    = auto() # Last message sent was received
-    MSG_EXIT    = auto() # Connection is being closed by other endpoint
-    MSG_GETKEY  = auto() # Request to obtain receiver's public key
-    MSG_DENY    = auto() # Request has been denied by server
-    MSG_PEERS   = auto() # Get a list of peers connected to remote node
+    MSG_NONE     = auto() # Packet is not associated with a message
+    MSG_HELLO    = auto() # Only ever issued by a client upon initial connection
+    MSG_CONN_REQ = auto()
+    MSG_ISEND    = auto() # Receiver is the target for the data
+    MSG_BLOCK    = auto() # Connection attempt has been blocked
+    MSG_OKAY     = auto() # Last message sent was received
+    MSG_EXIT     = auto() # Connection is being closed by other endpoint
+    MSG_GETKEY   = auto() # Request to obtain receiver's public key
+    MSG_DENY     = auto() # Request has been denied by server
+    MSG_PEERS    = auto() # Get a list of peers connected to remote node
     # Utility
-    MSG_NULLSTR = auto() # Null string, often sent by crashed clients
-    MSG_UNKNOWN = auto() # Server could not interpret provided message
+    MSG_NULLSTR  = auto() # Null string, often sent by crashed clients
+    MSG_UNKNOWN  = auto() # Server could not interpret provided message
     PREAMBLEONLY_END = auto()
 
 
@@ -33,6 +35,7 @@ class BodyData(Enum):
     MSG_ECHO  = PreambleOnly.PREAMBLEONLY_END.value # Instruct receiver to echo back message
     MSG_ISKEY = auto() # Body data is a public key
     MSG_DATA  = auto() # Data is contained in the body
+    MSG_ENC   = auto() # Data is encrypted
     BODYDATA_END = auto()
 
 
@@ -61,8 +64,11 @@ class Packet:
         _body (bytes): The primary data body containing all information, if any.
 
     '''
-    _preamble: int   = PreambleOnly.MSG_NONE.value
-    _body:     bytes = bytes()
+    _preamble:  int   = PreambleOnly.MSG_NONE.value
+    _dest_ip:   str   = "127.0.0.1"
+    _dest_port: int   = 7877
+    _data_size: int   = 0
+    _body:      bytes = bytes()
 
 
     def construct(self, preamble: Enum | int, body: bytes | str) -> None:
@@ -84,7 +90,7 @@ class Packet:
             The preamble concatenated with the body of the calling class instance.
         
         '''
-        return(pack("!H2046s", self._preamble, self._body))
+        return(pack(f"!H{len(self._body)}s", self._preamble, self._body))
     
 
     def unpack(self, packet: bytes) -> None:
@@ -94,7 +100,7 @@ class Packet:
             packet (bytes): Raw byte sequence to be unpacked into Packet object.
         
         '''
-        preamble, body = unpack("!H2046s", packet)
+        preamble, body = unpack(f"!H{len(packet)-2}s", packet)
         self.construct(preamble, body)
 
 

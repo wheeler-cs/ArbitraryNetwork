@@ -1,9 +1,12 @@
+import Messages
+from Messages import Packet
 from PeerNode import PeerNode
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from dataclasses import dataclass
+from struct import pack, unpack
 from typing import Dict, Union
 
 
@@ -131,10 +134,20 @@ class KeyStore(object):
             if(p == peer):
                 return peer
         return None
+    
+
+    def get_pub_key(self, p: PeerNode) -> Union[rsa.RSAPublicKey, None]:
+        '''
+        
+        '''
+        try:
+            return(self.peer_public_keys[p])
+        except KeyError as ke:
+            return None
 
 
 
-    def gen_keys(self, public_key:str, private_key: str) -> None:
+    def gen_keys(self, public_key: str, private_key: str) -> None:
         '''Generates a private key and its derived public key and stores the pair in seperate files.
 
         Parameters:
@@ -156,6 +169,27 @@ class KeyStore(object):
             key_write.write(pem_priv)
         with open(public_key, "wb") as key_write:
             key_write.write(pem_pub)
+
+
+    def encrypt_packet(self, packet: Packet, peer: PeerNode) -> bytes:
+        '''Encrypts a packet's contents using a public key stored in the keystore.
+
+        Parameters:
+            packet (Messages.Packet): Packet containing data to be encrypted.
+            peer (PeerNode.PeerNode): Peer whose public key will be used for encryption.
+
+        Returns:
+            A `Packet` with the body containing the encrypted preamble and body of the original packet.
+        '''
+        pub_key = self.get_pub_key(peer)
+        byte_string = packet.pack()
+        enc_string = pub_key.encrypt(byte_string, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                               algorithm=hashes.SHA256(),
+                                                               label=None))
+        return enc_string
+
+
+
         
 
     def encrypt(self, data: bytes, key) -> bytes:
