@@ -35,7 +35,12 @@ class Node(object):
     
     '''
     def __init__(self, cfg_dir: str, port: Union[int, None] = None, mode: str = "relay") -> None:
-        '''
+        '''Class initializer for `Node` class.
+
+        Parameters:
+            cfg_dir (str): Directory containing the configuration files for the server and client.
+            port (Union[int, None]): The port to listen for connections.
+            mode (str): The mode the server should run in.
         
         '''
         # Functionality information
@@ -231,7 +236,7 @@ class Node(object):
 
 
     
-    def layer_packet(self, data: str | bytes) -> Messages.Packet:
+    def layer_packet(self, data: Union[str, bytes]) -> Messages.Packet:
         '''
         
         '''

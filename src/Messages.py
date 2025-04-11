@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum, auto
 from struct import pack, unpack
+from typing import Union
 
 
 '''
@@ -122,7 +123,7 @@ class Packet:
     
 
     @preamble.setter
-    def preamble(self, p: Enum | int) -> None:
+    def preamble(self, p: Union[Enum, int]) -> None:
         if(isinstance(p, Enum)):
             p = int(p.value)
         self._preamble = p
@@ -134,7 +135,7 @@ class Packet:
     
 
     @body.setter
-    def body(self, b: bytes | str) -> None:
+    def body(self, b: Union[bytes, str]) -> None:
         if(isinstance(b, str)):
             b = b.encode("utf-8")
         self._body = b
