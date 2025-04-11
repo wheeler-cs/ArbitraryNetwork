@@ -14,14 +14,14 @@ class PreambleOnly(Enum):
     '''
     MSG_NONE     = auto() # Packet is not associated with a message
     MSG_HELLO    = auto() # Only ever issued by a client upon initial connection
-    MSG_CONN_REQ = auto()
+    MSG_CONN_REQ = auto() # Message is a connection request; sent to destination node
     MSG_ISEND    = auto() # Receiver is the target for the data
     MSG_BLOCK    = auto() # Connection attempt has been blocked
     MSG_OKAY     = auto() # Last message sent was received
     MSG_EXIT     = auto() # Connection is being closed by other endpoint
     MSG_GETKEY   = auto() # Request to obtain receiver's public key
     MSG_DENY     = auto() # Request has been denied by server
-    MSG_PEERS    = auto() # Get a list of peers connected to remote node
+    MSG_PEERS    = auto() # Get a list of peers currently known by self
     # Utility
     MSG_NULLSTR  = auto() # Null string, often sent by crashed clients
     MSG_UNKNOWN  = auto() # Server could not interpret provided message
@@ -71,17 +71,23 @@ class Packet:
     _body:      bytes = bytes()
 
 
-    def construct(self, preamble: Enum | int, body: bytes | str) -> None:
+    def construct(self, preamble: Enum | int, ip: str, port: int, size: int, body: bytes | str) -> None:
         '''Changes the internal variables of the instance.
 
         Parameters:
             preamble (Enum | int): Message type to be stored in the preamble.
+            ip (str): IP address for the destination.
+            port (int): Target port associated with the IP address.
+            size (int): Size of the overall message.
             body (bytes | str): Data associated with the message type.
         
         '''
-        self.preamble = preamble
-        self.body = body
-        
+        self.preamble   = preamble
+        self._dest_ip   = ip
+        self._dest_port = port
+        self._data_size = size
+        self.body       = body
+
 
     def pack(self) -> bytes:
         '''Pack everything in the class into a single bytes object.
@@ -90,7 +96,12 @@ class Packet:
             The preamble concatenated with the body of the calling class instance.
         
         '''
-        return(pack(f"!H{len(self._body)}s", self._preamble, self._body))
+        return(pack(f"!H9sHH{len(self._body)}s",
+                    self._preamble,
+                    self._dest_ip.encode("utf-8"),
+                    self._dest_port,
+                    self._data_size,
+                    self._body))
     
 
     def unpack(self, packet: bytes) -> None:
@@ -100,8 +111,8 @@ class Packet:
             packet (bytes): Raw byte sequence to be unpacked into Packet object.
         
         '''
-        preamble, body = unpack(f"!H{len(packet)-2}s", packet)
-        self.construct(preamble, body)
+        preamble, ip, port, size, body = unpack(f"!H9sHH{len(packet)-15}s", packet)
+        self.construct(preamble, ip, port, size, body)
 
 
     # Accessors and Mutators -----------------------------------------------------------------------

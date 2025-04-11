@@ -44,6 +44,7 @@ class Node(object):
         # Server variables
         self.server_port:   int              = port
         self.server_sock:   socket.socket    = None
+        self.server_conn:   socket.socket    = None
         self.server_thread: threading.Thread = None
         # Client variables
         self.client_sock:   socket.socket    = None
@@ -129,7 +130,7 @@ class Node(object):
             # Connect to peer
             self.client_sock.connect((peer.ip, peer.port))
             # Send request for key and await response
-            data_packet.construct(Messages.PreambleOnly.MSG_GETKEY, "")
+            data_packet.construct(Messages.PreambleOnly.MSG_GETKEY, peer.ip, peer.port, 0, "")
             self.client_sock.send(data_packet.pack())
             data_packet.unpack(self.client_sock.recv(2048))
             if(data_packet._preamble == Messages.PreambleOnly.MSG_BLOCK.value):
@@ -153,7 +154,7 @@ class Node(object):
         data_packet = Messages.Packet()
         try:
             self.client_sock.connect((target.ip, target.port))
-            data_packet.construct(Messages.PreambleOnly.MSG_HELLO, '')
+            data_packet.construct(Messages.PreambleOnly.MSG_HELLO, '', 0, 0, '')
             self.client_sock.send(data_packet.pack())
         except Exception as e:
             print("[CLIENT] Unable to connect with server")
@@ -244,7 +245,6 @@ class Node(object):
         # TODO: Implement the rest of the encryption
 
 
-
     
     def client_as_terminal(self) -> None:
         '''Operate the client as a terminal while connected to the server. This allows the client to
@@ -257,45 +257,18 @@ class Node(object):
             # Get output from user and handle each case accordingly
             message = input("> ")
             if(message == "EXIT"):
-                data_packet.construct(Messages.PreambleOnly.MSG_EXIT, '')
+                data_packet.construct(Messages.PreambleOnly.MSG_EXIT, '', 0, 0, '')
                 self.client_sock.send(data_packet.pack())
                 self.client_sock.close()
                 do_terminal = False
-            elif(message == "SHUTDOWN"):
-                data_packet.construct(Messages.DebugMessage.MSG_SHUTDOWN, '')
+            elif(message == "CONNECT"):
+                '''
+                '''
+            elif(message == "SEND"):
+                message = input("Message > ")
+                data_packet.construct(Messages.MultiPacket.MSG_FORWARD, '', 0, 0, message)
                 self.client_sock.send(data_packet.pack())
-                self.client_sock.close()
-                do_terminal = False
-            elif(message[:5] == "ECHO "):
-                data_packet.construct(Messages.BodyData.MSG_ECHO, message[5:])
-                self.client_sock.send(data_packet.pack())
-                data_packet.unpack(self.client_sock.recv(2048))
-                print(f"[CLIENT] Server Echo: {data_packet.body}")
-            elif(message == "LIST"):
-                self.list_peers()
-            elif(message == "ROUTE"):
-                self.show_route()
-            elif(message == "CLEAR"):
-                self.clear_route()
-            elif(message[:4] == "HOP "):
-                ip, port = message[4:].split(':')
-                port = int(port)
-                self.route_peer(PeerNode(ip, port))
-            elif(message[:10] == "AUTOROUTE "):
-                depth = int(message[10:])
-                self.auto_route(depth)
-            elif(message == "HELLO"):
-                packet = self.hello_packet()
-                print(len(packet._body))
-                print(packet._body)
-            elif(message[:5] == "SEND "):
-                data = message[5:]
-                packet = self.layer_packet(data)
-            else:
-                data_packet.construct(Messages.BodyData.MSG_DATA, message)
-                self.client_sock.send(data_packet.pack())
-                data_packet.unpack(self.client_sock.recv(2048))
-                print(f"[CLIENT] Server Responded: {data_packet.body}")
+
     
     
     def start_threads(self) -> None:
@@ -319,6 +292,24 @@ class Node(object):
             self.server_thread.join()
 
 
+    def connection_loop(self) -> None:
+        '''
+        
+        '''
+        data_packet = Messages.Packet()
+        do_conn = True
+        while do_conn:
+            data_packet.unpack(self.server_conn.recv(2048))
+            print(f"[SERVER] Data Recieved: {data_packet}")
+            # Forward packet to next hop, and wait for a reply
+            if(data_packet.preamble == Messages.MultiPacket.MSG_FORWARD.value):
+                print(data_packet)
+                forward_node = PeerNode(data_packet._dest_ip, data_packet._dest_port)
+                self.connect(forward_node)
+
+
+
+
     def run_server(self) -> None:
         '''Run the server component of the Node, which communicates with incoming clients.
         
@@ -329,39 +320,16 @@ class Node(object):
         # Run server process
         while do_server:
             self.server_sock.listen(5)
-            conn, addr = self.server_sock.accept()
-            data_packet.unpack(conn.recv(2048))
+            self.server_conn, _ = self.server_sock.accept()
+            data_packet.unpack(self.server_conn.recv(2048))
             # NOTE: GETKEY closes connection immediately after sending key
             if(data_packet.preamble == Messages.PreambleOnly.MSG_GETKEY.value):
-                print(f"[SERVER] Received key request from {addr}")
-                data_packet.construct(Messages.BodyData.MSG_ISKEY, self.keystore.server_keypair.public.public_bytes(encoding=serialization.Encoding.PEM,
-                                                                                                                    format=serialization.PublicFormat.SubjectPublicKeyInfo))
-                conn.send(data_packet.pack())
-                conn.close()
-            # NOTE: HELLO starts a new client dialog
+                data_packet.construct(Messages.BodyData.MSG_ISKEY, "", 0, 0, self.keystore.server_keypair.public.public_bytes(encoding=serialization.Encoding.PEM,
+                                                                                                                              format=serialization.PublicFormat.SubjectPublicKeyInfo))
+                self.server_conn.send(data_packet.pack())
+                self.server_conn.close()
             elif(data_packet.preamble == Messages.PreambleOnly.MSG_HELLO.value):
-                print(f"[SERVER] Received connection from {addr}")
-                do_conn = True
-                # Run an active connection with client
-                while do_conn:
-                    data_packet.unpack(conn.recv(2048))
-                    print(f"[SERVER] {addr}: {data_packet}")
-                    if(data_packet.preamble == Messages.BodyData.MSG_ECHO.value): # Echo message to client
-                        conn.send(data_packet.pack())
-                    elif(data_packet.preamble == Messages.PreambleOnly.MSG_EXIT.value): # Client is disconnecting
-                        do_conn = False
-                    elif(data_packet.preamble == Messages.DebugMessage.MSG_SHUTDOWN.value): # DEBUG: Shutdown server using client
-                        do_conn = False
-                        do_server = False
-                    else: # Message could not be interpreted
-                        data_packet.construct(Messages.PreambleOnly.MSG_UNKNOWN, '')
-                        conn.send(data_packet.pack())
-                conn.close()
-            else:
-                print(f"[SERVER] Received unknown packet type from client")
-                print(f"         |-> {data_packet}")
-                data_packet.construct(Messages.PreambleOnly.MSG_UNKNOWN, '')
-                conn.send(data_packet.pack())
+                self.connection_loop()
         print(f"[SERVER] Terminating operation")
 
 
