@@ -165,23 +165,6 @@ class Node(object):
             print("[CLIENT] Unable to connect with server")
             print(f"        |-> {e}")
 
-
-    def list_peers(self) -> None:
-        '''Print a list of peers that are currently known to exist.
-        
-        '''
-        for peer in self.keystore.peer_public_keys.keys():
-            print(peer)
-
-    
-    def show_route(self) -> None:
-        '''Print the current route the client has chosen.
-        
-        '''
-        print("[CLIENT] Current route:")
-        for peer in self.route:
-            print('\t' + str(peer))
-
     
     def clear_route(self) -> None:
         '''Unroute all peers.
@@ -199,6 +182,7 @@ class Node(object):
             port (int): The port at which the peer will be contacted through.
         
         '''
+        print(f"[CLENT] Added {peer} to end of current route")
         peer = self.keystore.get_peer(peer) # Get version of the peer stored
         if(peer is not None):
             self.route.append(peer)
@@ -216,6 +200,19 @@ class Node(object):
         else:
             raise(ValueError("Route size must be a positive integer"))
         
+    
+    def open_route(self) -> None:
+        '''
+        
+        '''
+        print("[CLIENT] Preparing route for transfer...")
+        self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        hello_packet = self.hello_packet(0)
+        self.client_sock.connect((self.route[0].ip, self.route[0].port))
+        self.client_sock.send(hello_packet.pack())
+        reply = self.client_sock.recv(2048)
+        print("[CLIENT] Route established")
+        
 
     def hello_packet(self, transfer_size: int = 0) -> Messages.Packet:
         '''Craft a multi-layered, encrypted packet to check if route can send data.
@@ -230,89 +227,52 @@ class Node(object):
         rev_peers = list(reversed(self.route[:-1]))
         layer = stop_packet
         for hop in rev_peers:
-            layer = Messages.Packet(Messages.MultiPacket.MSG_FORWARD, hop.ip, hop.port, 0, layer)
+            layer = Messages.Packet(Messages.MultiPacket.MSG_FORWARD.value, hop.ip, hop.port, 0, layer)
             layer = self.keystore.encrypt_packet(layer, hop)
-        return Messages.Packet(Messages.MultiPacket.MSG_FORWARD, self.route[0].ip, self.route[0].port, 0, layer)
+        return Messages.Packet(Messages.MultiPacket.MSG_FORWARD.value, self.route[0].ip, self.route[0].port, 0, layer)
 
-
-    
-    def layer_packet(self, data: Union[str, bytes]) -> Messages.Packet:
-        '''
-        
-        '''
-        # Convert string data to bytes
-        if(type(data) is str):
-            data = data.encode("utf-8")
-        # Encryption order is backwards to the routing order
-        rev_peers = list(reversed(self.route))
-        packet = Messages.Packet(Messages.MultiPacket.MSG_STOP, data)
-        packet = self.keystore.encrypt_packet(packet, rev_peers[-1])
-        # TODO: Implement the rest of the encryption
-
-
-    
-    def client_as_terminal(self) -> None:
-        '''Operate the client as a terminal while connected to the server. This allows the client to
-        issue a number of predefined commands directly to the destination.
-        
-        '''
-        do_terminal = True
-        data_packet = Messages.Packet()
-        while do_terminal:
-            # Get output from user and handle each case accordingly
-            message = input("> ")
-            if(message == "EXIT"):
-                data_packet.construct(Messages.PreambleOnly.MSG_EXIT, '', 0, 0, '')
-                self.client_sock.send(data_packet.pack())
-                self.client_sock.close()
-                do_terminal = False
-            elif(message == "CONNECT"):
-                '''
-                '''
-            elif(message == "SEND"):
-                message = input("Message > ")
-                data_packet.construct(Messages.MultiPacket.MSG_FORWARD, '', 0, 0, message)
-                self.client_sock.send(data_packet.pack())
-
-    
     
     def start_threads(self) -> None:
         '''Start the thread to run the server separately from the client.
         
         '''
-        # TODO: Implement a `run_client()` method
         if(self.mode == "server"):
             self.run_server()
         elif(self.mode == "client"):
-            self.contact_core()
-            self.connect(PeerNode(ip="127.0.0.1", port=7877))
-            self.client_as_terminal()
+            self.run_client()
         else:
             self.server_thread = threading.Thread(target=self.run_server)
             self.server_thread.start()
             sleep(1) # Gives server thread time to start before cores on the same host contact it
-            self.contact_core()
-            self.connect(PeerNode(ip="127.0.0.1", port=7877))
-            self.client_as_terminal()
+            self.client_thread = threading.Thread(target=self.run_client)
+            self.client_thread.start()
+            self.client_thread.join()
             self.server_thread.join()
 
-
-    def connection_loop(self) -> None:
+    
+    def run_client(self) -> None:
         '''
         
         '''
-        data_packet = Messages.Packet()
-        do_conn = True
-        while do_conn:
-            data_packet.unpack(self.server_conn.recv(2048))
-            print(f"[SERVER] Data Recieved: {data_packet}")
-            # Forward packet to next hop, and wait for a reply
-            if(data_packet.preamble == Messages.MultiPacket.MSG_FORWARD.value):
-                print(data_packet)
-                forward_node = PeerNode(data_packet._dest_ip, data_packet._dest_port)
-                self.connect(forward_node)
+        # TODO: Make this more flushed out
+        self.client_demo()
 
+    
+    def client_demo(self) -> None:
+        '''
+        
+        '''
+        # Get list of nodes and make a route
+        self.contact_core()
+        self.auto_route(1)
+        # Establish route with nodes
+        self.route_peer(PeerNode("127.0.0.1", 7877))
+        self.open_route()
+        # Send message to destination
 
+        # Receive reply
+
+        # End connection
 
 
     def run_server(self) -> None:
@@ -334,8 +294,24 @@ class Node(object):
                 self.server_conn.send(data_packet.pack())
                 self.server_conn.close()
             elif(data_packet.preamble == Messages.PreambleOnly.MSG_HELLO.value):
-                self.connection_loop()
+                self.server_loop()
         print(f"[SERVER] Terminating operation")
+
+
+    def server_loop(self) -> None:
+            '''
+
+            '''
+            data_packet = Messages.Packet()
+            do_conn = True
+            while do_conn:
+                data_packet.unpack(self.server_conn.recv(2048))
+                print(f"[SERVER] Data Recieved: {data_packet}")
+                # Forward packet to next hop, and wait for a reply
+                if(data_packet.preamble == Messages.MultiPacket.MSG_FORWARD.value):
+                    forward_node = PeerNode(data_packet._dest_ip, data_packet._dest_port)
+                    self.connect(forward_node)
+
 
 
 # ======================================================================================================================

@@ -97,7 +97,7 @@ class Packet:
             The preamble concatenated with the body of the calling class instance.
         
         '''
-        return(pack(f"!H9sHH{len(self._body)}s",
+        return(pack(f"!H9sHH{int(len(self._body))}s",
                     self._preamble,
                     self._dest_ip.encode("utf-8"),
                     self._dest_port,

@@ -190,9 +190,11 @@ class KeyStore(object):
         '''
         pub_key = self.get_pub_key(peer)
         byte_string = packet.pack()
-        enc_string = pub_key.encrypt(byte_string, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                                               algorithm=hashes.SHA256(),
-                                                               label=None))
+        enc_string = b''
+        for i in range(0, int(len(byte_string) / 190) + 1):
+            enc_string += pub_key.encrypt(byte_string[(i * 190):((i + 1) * 190)], padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                                                               algorithm=hashes.SHA256(),
+                                                                                               label=None))
         return enc_string
 
 
