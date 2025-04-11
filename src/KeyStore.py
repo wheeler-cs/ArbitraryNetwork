@@ -35,7 +35,8 @@ class KeyStore(object):
         peer_public_keys (Dict[PeerNode, rsa.RSAPublicKey]): Peer nodes and their associated public key.
     
     Note:
-        A dictionary is used for the Peer-Key pairings so a peer is not included twice.
+        A dictionary is used for the Peer-Key pairings so a peer is not included twice. Specifying already existing
+        nodes when writing to the dictionary will overwrite stored information.
     
     '''
     def __init__(self) -> None:
@@ -87,7 +88,7 @@ class KeyStore(object):
 
         Parameters:
             peer (PeerNode.PeerNode): Data about the new peer being added.
-            key (None | rsa.RSAPublicKey): Contains either the public key of the peer being added to
+            key (Union[rsa.RSAPublicKey, None]): Contains either the public key of the peer being added to
                                            the list or None when that information is not yet known.
         
         '''
@@ -99,7 +100,7 @@ class KeyStore(object):
 
         Parameters:
             peer (PeerNode.PeerNode): Desired node to have the key associated with.
-            key (bytes | rsa.RSAPublicKey): The public key to be associated with the host specified.
+            key (Union[bytes, rsa.RSAPublicKey]): The public key to be associated with the host specified.
                                             If the parameter is of type `bytes`, then it will be
                                             converted into `rsa.RSAPublicKey`.
         
@@ -137,7 +138,13 @@ class KeyStore(object):
     
 
     def get_pub_key(self, p: PeerNode) -> Union[rsa.RSAPublicKey, None]:
-        '''
+        '''Get the public key of a given node.
+
+        Parameters:
+            p (PeerNode): Information of the peer to search for in the keystore.
+
+        Returns:
+            If the peer is stored in the keystore, the public key of the node is returned. Otherwise, returns `None`.
         
         '''
         try:
@@ -187,30 +194,6 @@ class KeyStore(object):
                                                                algorithm=hashes.SHA256(),
                                                                label=None))
         return enc_string
-
-
-
-        
-
-    def encrypt(self, data: bytes, key) -> bytes:
-        '''
-        
-        '''
-        enc_data = key.encrypt(data, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                                  algorithm=hashes.SHA256(),
-                                                  label=None))
-        return enc_data
-
-
-    def decrypt(self, data: bytes, key) -> bytes:
-        '''
-        
-        '''
-        dec_data = key.decrypt(data,
-                               padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                            algorithm=hashes.SHA256(),
-                                            label=None))
-        return dec_data
 
 
 

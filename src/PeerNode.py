@@ -15,10 +15,10 @@ class PeerNode(object):
     
     '''
     def __init__(self, ip: str = "", port: int = 8192, name: str = "UNDEFINED", is_core = False) -> None:
-        self._ip:         str  = ip
-        self._port:       str  = port
-        self._name:       str  = name
-        self._is_core:    bool = is_core
+        self._ip:      str  = ip
+        self._port:    str  = port
+        self._name:    str  = name
+        self._is_core: bool = is_core
 
 
     # Accessors and mutators -----------------------------------------------------------------------
