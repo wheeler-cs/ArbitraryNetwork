@@ -9,49 +9,33 @@ I hate how Python implements enums...
 '''
 
 # Standardized message strings for networked communication
-class PreambleOnly(Enum):
+class Preambles(Enum):
     '''Packets of this type ignore all data stored in the body portion.
     
     '''
     MSG_NONE     = auto() # Packet is not associated with a message
+    # Connection handling
     MSG_HELLO    = auto() # Only ever issued by a client upon initial connection
     MSG_CONN_REQ = auto() # Message is a connection request; sent to destination node
-    MSG_ISEND    = auto() # Receiver is the target for the data
     MSG_BLOCK    = auto() # Connection attempt has been blocked
     MSG_OKAY     = auto() # Last message sent was received
     MSG_EXIT     = auto() # Connection is being closed by other endpoint
+    # Key exchanging
     MSG_GETKEY   = auto() # Request to obtain receiver's public key
+    MSG_ISKEY    = auto() # Body data is a public key
+    # Data processing
+    MSG_DATA     = auto() # Data is contained in the body
+    MSG_ENC      = auto() # Data is encrypted
+    MSG_ISEND    = auto() # Receiver is the target for the data
+    MSG_STOP    = auto() # Node is intended destination
     MSG_DENY     = auto() # Request has been denied by server
     MSG_PEERS    = auto() # Get a list of peers currently known by self
+    MSG_FORWARD  = auto() # Node should decrypt body and forward it
     # Utility
+    MSG_ECHO     = auto() # Instruct receiver to echo back message
     MSG_NULLSTR  = auto() # Null string, often sent by crashed clients
     MSG_UNKNOWN  = auto() # Server could not interpret provided message
-    PREAMBLEONLY_END = auto()
-
-
-class BodyData(Enum):
-    '''Data inside the packet body is relevant to the desired operation.
-    
-    '''
-    MSG_ECHO  = PreambleOnly.PREAMBLEONLY_END.value # Instruct receiver to echo back message
-    MSG_ISKEY = auto() # Body data is a public key
-    MSG_DATA  = auto() # Data is contained in the body
-    MSG_ENC   = auto() # Data is encrypted
-    BODYDATA_END = auto()
-
-
-class MultiPacket(Enum):
-    '''Body field of packet contains other packets.
-    
-    '''
-    MSG_FORWARD = BodyData.BODYDATA_END.value # Node should decrypt body and forward it
-    MSG_STOP    = auto() # Node is intended destination
-
-
-class DebugMessage(Enum):
-    '''DEBUG messages not intended for regular use.
-    
-    '''
+    # Debugging
     MSG_SHUTDOWN = 100 # Instruct remote server to shutdown
 
 
@@ -65,7 +49,7 @@ class Packet:
         _body (bytes): The primary data body containing all information, if any.
 
     '''
-    _preamble:  int   = PreambleOnly.MSG_NONE.value
+    _preamble:  int   = Preambles.MSG_NONE.value
     _dest_ip:   str   = "127.0.0.1"
     _dest_port: int   = 7877
     _data_size: int   = 0
