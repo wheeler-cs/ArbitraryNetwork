@@ -25,9 +25,10 @@ class Preambles(Enum):
     MSG_ISKEY    = auto() # Body data is a public key
     # Data processing
     MSG_DATA     = auto() # Data is contained in the body
+    MSG_TEXT     = auto() # Data in the body is text data
     MSG_ENC      = auto() # Data is encrypted
     MSG_ISEND    = auto() # Receiver is the target for the data
-    MSG_STOP    = auto() # Node is intended destination
+    MSG_STOP     = auto() # Node is intended destination
     MSG_DENY     = auto() # Request has been denied by server
     MSG_PEERS    = auto() # Get a list of peers currently known by self
     MSG_FORWARD  = auto() # Node should decrypt body and forward it

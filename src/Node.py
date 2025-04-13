@@ -135,15 +135,12 @@ class Node(object):
             # Connect to peer
             self.client_sock.connect((peer.ip, peer.port))
             # Send request for key and await response
-            data_packet.construct(Messages.PreambleOnly.MSG_GETKEY, peer.ip, peer.port, 0, "")
+            data_packet.construct(Messages.Preambles.MSG_GETKEY, peer.ip, peer.port, 0, "")
             self.client_sock.send(data_packet.pack())
             data_packet.unpack(self.client_sock.recv(2048))
-            if(data_packet._preamble == Messages.PreambleOnly.MSG_BLOCK.value):
-                print("[CLIENT] Peer blocked request for key")
-                peer_key = None
-            elif(data_packet._preamble == Messages.BodyData.MSG_ISKEY.value):
-                # Need to get rid of "ISKEY" portion of packet and reencode
-                peer_key = data_packet._body
+            # Naive approach of assuming data is good
+            print("[CLIENT] Key received")
+            peer_key = data_packet.body
             self.client_sock.close()
             self.keystore.set_peer_key(PeerNode(ip=peer.ip, port=peer.port), peer_key)
 
@@ -159,7 +156,7 @@ class Node(object):
         data_packet = Messages.Packet()
         try:
             self.client_sock.connect((target.ip, target.port))
-            data_packet.construct(Messages.PreambleOnly.MSG_HELLO, '', 0, 0, '')
+            data_packet.construct(Messages.Preambles.MSG_HELLO, '', 0, 0, '')
             self.client_sock.send(data_packet.pack())
         except Exception as e:
             print("[CLIENT] Unable to connect with server")
@@ -220,16 +217,30 @@ class Node(object):
         Returns:
             Multi-layer "hello" packet used in transmission.
         '''
+        '''
         # Create inner-most packet for destination
-        stop_packet = Messages.Packet(Messages.MultiPacket.MSG_STOP.value, self.route[-1].ip, self.route[-1].port, transfer_size, b'')
+        stop_packet = Messages.Packet(Messages.Preambles.MSG_STOP.value, self.route[-1].ip, self.route[-1].port, transfer_size, b'')
         stop_packet = self.keystore.encrypt_packet(stop_packet, self.route[-1])
         # Wrap destination packet in layers of encryption
         rev_peers = list(reversed(self.route[:-1]))
         layer = stop_packet
         for hop in rev_peers:
-            layer = Messages.Packet(Messages.MultiPacket.MSG_FORWARD.value, hop.ip, hop.port, 0, layer)
+            layer = Messages.Packet(Messages.Preambles.MSG_FORWARD.value, hop.ip, hop.port, 0, layer)
             layer = self.keystore.encrypt_packet(layer, hop)
-        return Messages.Packet(Messages.MultiPacket.MSG_FORWARD.value, self.route[0].ip, self.route[0].port, 0, layer)
+        return Messages.Packet(Messages.Preambles.MSG_FORWARD.value, self.route[0].ip, self.route[0].port, 0, layer)
+        '''
+        stop_packet = Messages.Packet(Messages.Preambles.MSG_TEXT, self.route[-1].ip, self.route[-1].port, transfer_size, b"Hello, world!")
+        rev_peers = list(reversed(self.route[:-1]))
+        #for peer in rev_peers:
+        #    stop_packet = Messages(Messages.Preambles.MSG_FORWARD, peer.ip, peer.port, 0, stop_packet.pack())
+        return stop_packet
+    
+
+    def pubkey_packet(self, ip: int, port: str) -> Messages.Packet:
+        '''
+        
+        '''
+        return Messages.Packet(Messages.Preambles.MSG_ISKEY, ip, port, 0, b'')
 
     
     def start_threads(self) -> None:
@@ -263,7 +274,7 @@ class Node(object):
         
         '''
         # Get list of nodes and make a route
-        self.contact_core()
+        #self.contact_core()
         self.auto_route(1)
         # Establish route with nodes
         self.route_peer(PeerNode("127.0.0.1", 7877))
@@ -275,42 +286,31 @@ class Node(object):
         # End connection
 
 
+    # Server components ----------------------------------------------------------------------------
     def run_server(self) -> None:
         '''Run the server component of the Node, which communicates with incoming clients.
         
         '''
         print(f"[SERVER] Running on port {self.server_port}")
         do_server = True
-        data_packet = Messages.Packet()
         # Run server process
+        data_packet = Messages.Packet()
         while do_server:
             self.server_sock.listen(5)
-            self.server_conn, _ = self.server_sock.accept()
+            self.server_conn, conn_info = self.server_sock.accept()
             data_packet.unpack(self.server_conn.recv(2048))
-            # NOTE: GETKEY closes connection immediately after sending key
-            if(data_packet.preamble == Messages.PreambleOnly.MSG_GETKEY.value):
-                data_packet.construct(Messages.BodyData.MSG_ISKEY, "", 0, 0, self.keystore.server_keypair.public.public_bytes(encoding=serialization.Encoding.PEM,
-                                                                                                                              format=serialization.PublicFormat.SubjectPublicKeyInfo))
-                self.server_conn.send(data_packet.pack())
+            print(f"[SERVER] Packet type: {Messages.Preambles(data_packet.preamble)}")
+            # Key exchange
+            if(data_packet.preamble == Messages.Preambles.MSG_GETKEY.value):
+                pubkey_packet = self.pubkey_packet(conn_info[0], conn_info[1])
+                self.server_conn.send(pubkey_packet.pack())
                 self.server_conn.close()
-            elif(data_packet.preamble == Messages.PreambleOnly.MSG_HELLO.value):
-                self.server_loop()
+            if(data_packet.preamble == Messages.Preambles.MSG_FORWARD.value):
+                print(f"Forward message received")
+
         print(f"[SERVER] Terminating operation")
 
 
-    def server_loop(self) -> None:
-            '''
-
-            '''
-            data_packet = Messages.Packet()
-            do_conn = True
-            while do_conn:
-                data_packet.unpack(self.server_conn.recv(2048))
-                print(f"[SERVER] Data Recieved: {data_packet}")
-                # Forward packet to next hop, and wait for a reply
-                if(data_packet.preamble == Messages.MultiPacket.MSG_FORWARD.value):
-                    forward_node = PeerNode(data_packet._dest_ip, data_packet._dest_port)
-                    self.connect(forward_node)
 
 
 
