@@ -93,7 +93,7 @@ def run_server(port: int) -> None:
             data = conn.recv(1024)
             print(f"Data Size: {len(data)}")
             ip, port, packet_type, message = unpack_packet(data)
-            ip = ip.decode("ascii")
+            ip = ip.decode("ascii").replace('\0', '')
             message = message.decode("ascii")
             print(f"[PACKET] {PacketType(packet_type)}: {message}")
             conn.send(data)
