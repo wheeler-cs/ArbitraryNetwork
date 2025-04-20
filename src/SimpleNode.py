@@ -1,5 +1,6 @@
 import argparse
 from enum import Enum, auto
+import json
 import socket
 from struct import pack, unpack
 from typing import Tuple
@@ -12,20 +13,29 @@ class PacketType(Enum):
 
 # Network info
 PORT = 7877
-PACKET_FORMAT = "!9sHH64s"
+PACKET_FORMAT = "!256sHH64s"
 
-# Target cores
-CORE_A: str = ("127.0.0.1", 10101)
-CORE_B: str = ("127.0.0.1", 10102)
-CORE_C: str = ("127.0.0.1", 10103)
-CORE_LIST = [CORE_A, CORE_B, CORE_C]
-DEST:   str = ("127.0.0.1", 10104)
+CORE_A = ()
+CORE_B = ()
+CORE_C = ()
+DEST   = ()
 
 
-def route_core() -> None:
+def load_cfg(cfg_file: str) -> None:
     '''
     
     '''
+    with open(cfg_file, 'r') as parameters:
+        data = json.load(parameters)
+    hops = data["route"]
+    global CORE_A
+    global CORE_B
+    global CORE_C
+    global DEST
+    CORE_A = (hops["HOP_A"], 7877)
+    CORE_B = (hops["HOP_B"], 7877)
+    CORE_C = (hops["HOP_C"], 7877)
+    DEST   = (hops["HOP_D"], 7877)
 
 
 def pack_packet(ip: str, port: int, packet_type: int, message: str) -> bytes:
@@ -33,7 +43,6 @@ def pack_packet(ip: str, port: int, packet_type: int, message: str) -> bytes:
     
     '''
     return pack(PACKET_FORMAT, ip.encode("ascii"), port, packet_type, message.encode("ascii"))
-
 
 
 def unpack_packet(data: bytes) -> Tuple[str, int, int, str]:
@@ -47,9 +56,9 @@ def run_client() -> None:
     '''
     
     '''
+    print("[CLIENT] Client running")
     client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_sock.connect((CORE_A))
-    print("[CLIENT] Client running")
     client_sock.send(pack_packet(CORE_B[0], CORE_B[1], PacketType.CONNECT.value, ''))
     client_sock.recv(1024)
     client_sock.send(pack_packet(CORE_C[0], CORE_C[1], PacketType.CONNECT.value, ''))
@@ -138,7 +147,7 @@ def create_argv() -> argparse.Namespace:
                         help="Mode override",
                         type=str,
                         choices=["client", "server"],
-                        default="relay")
+                        default="server")
     return parser.parse_args()
 
 
@@ -148,4 +157,5 @@ if __name__ == "__main__":
     if(argv.mode == "server"):
         run_server(argv.port)
     elif(argv.mode == "client"):
+        load_cfg("cfg/client.json")
         run_client()
